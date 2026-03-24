@@ -1,0 +1,109 @@
+# ILinkBotSDK
+
+A lightweight .NET SDK for WeChat iLink Bot protocol.
+
+## Features
+
+- QR Code Login
+- Message Receiving (Long Polling)
+- Message Sending
+- Typing Status
+- State Persistence (SQLite)
+- Dependency Injection Support
+
+## Installation
+
+```bash
+dotnet add package ILinkBotSDK
+```
+
+## Quick Start
+
+```csharp
+using ILinkBotSDK;
+
+// Create bot instance
+var bot = new ILinkBot(new ILinkBotOptions
+{
+    BaseUrl = "https://ilinkai.weixin.qq.com",
+    StateDirectory = "./.ilink"
+});
+
+// Login (QR code login, will reuse saved credentials automatically)
+await bot.LoginAsync();
+
+Console.WriteLine($"Logged in! BotId: {bot.BotId}");
+
+// Receive messages
+while (bot.IsConnected)
+{
+    var messages = await bot.RecvAsync(TimeSpan.FromSeconds(35));
+
+    foreach (var msg in messages)
+    {
+        var text = msg.ItemList?.FirstOrDefault()?.TextItem?.Text;
+        if (string.IsNullOrEmpty(text)) continue;
+
+        Console.WriteLine($"Received: {text}");
+
+        // Reply
+        await bot.SendAsync(msg.FromUserId!, "Echo: " + text);
+    }
+}
+
+await bot.CloseAsync();
+```
+
+## Dependency Injection
+
+```csharp
+var services = new ServiceCollection();
+services.AddILinkBot(options =>
+{
+    options.BaseUrl = "https://ilinkai.weixin.qq.com";
+    options.StateDirectory = "./.ilink";
+});
+
+var provider = services.BuildServiceProvider();
+var bot = provider.GetRequiredService<ILinkBot>();
+
+await bot.LoginAsync();
+
+// ... use bot
+
+await bot.CloseAsync();
+```
+
+## API Reference
+
+| Method/Property | Description |
+|-----------------|-------------|
+| `LoginAsync(force=false)` | Login via QR code, auto-reuse credentials if available |
+| `RecvAsync(timeout=35s)` | Long poll for messages |
+| `SendAsync(to, text)` | Send text message |
+| `SendTypingAsync(to)` | Send typing status |
+| `StopTypingAsync(to)` | Cancel typing status |
+| `CloseAsync()` | Save state and cleanup |
+| `IsConnected` | Connection status |
+| `BotId` | Bot ID |
+| `UserId` | Logged in user ID |
+
+## Project Structure
+
+```
+src/ILinkBotSDK/
+├── Models/          # Data models
+├── Api/             # HTTP client
+├── Auth/            # Login service
+├── Messaging/       # Message send/receive
+├── Storage/         # SQLite persistence
+└── ILinkBot.cs      # Main class
+```
+
+## Acknowledgments
+
+This project is based on the [openclaw-weixin](https://github.com/echoxu/openclaw-weixin) project, which provides the protocol implementation reference for WeChat iLink Bot.
+
+## License
+
+MIT

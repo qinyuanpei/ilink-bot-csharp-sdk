@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dotnet build:*)",
+      "Bash(dotnet test tests/ILinkBotSDK.Tests/ILinkBotSDK.Tests.csproj)",
+      "Bash(dotnet test)",
+      "Bash(dotnet clean \"D:\\\\Projects\\\\welink-csharp-sdk\\\\example\\\\MEAIBot\\\\MEAIBot.csproj\")",
+      "Bash(cat \"D:\\\\Projects\\\\welink-csharp-sdk\\\\example\\\\MEAIBot\\\\AppConfig.cs\")",
+      "Bash(dotnet msbuild /p:TrackFileAccess=false /t:WriteCodeMetrics /v:q)",
+      "Bash(git init:*)",
+      "Bash(tasklist:*)",
+      "Bash(git remote add:*)",
+      "Bash(git add .)"
+    ]
+  }
+}
