@@ -100,9 +100,41 @@ src/ILinkBotSDK/
 └── ILinkBot.cs      # Main class
 ```
 
+## Examples
+
+### EchoBot
+A simple echo bot that replies to messages with a prefix.
+
+```bash
+cd example/EchoBot
+dotnet run
+```
+
+Features:
+- Auto-reply with "[Bot]" prefix
+- Supports text, image, video, file, and voice messages
+
+### MEAIBot
+An AI-powered bot that integrates with OpenAI or Anthropic AI. Supports multi-turn conversations.
+
+```bash
+cd example/MEAIBot
+
+# Copy and configure the environment file
+cp .env.example .env
+# Edit .env with your API keys
+
+dotnet run
+```
+
+Features:
+- Integration with OpenAI or Anthropic (via Microsoft.Extensions.AI)
+- Multi-turn conversation history per user
+- Typing indicator support
+
 ## Acknowledgments
 
-This project is based on the [openclaw-weixin](https://github.com/echoxu/openclaw-weixin) project, which provides the protocol implementation reference for WeChat iLink Bot.
+This project is based on the [openclaw-weixin](https://github.com/hao-ji-xing/openclaw-weixin) project, which provides the protocol implementation reference for WeChat iLink Bot.
 
 ## License
 
