@@ -32,7 +32,13 @@ jobs:
         run: dotnet build src/ILinkBotSDK/ILinkBotSDK.csproj --configuration Release --no-restore
 
       - name: Pack
-        run: dotnet pack src/ILinkBotSDK/ILinkBotSDK.csproj --configuration Release --no-restore -p:PackageVersion=$(echo ${{ github.ref_name }} | sed 's/^v//')
+        run: |
+          if [[ '${{ github.ref }}' == refs/tags/v* ]]; then
+            VERSION=$(echo '${{ github.ref_name }}' | sed 's/^v//')
+            dotnet pack src/ILinkBotSDK/ILinkBotSDK.csproj --configuration Release --no-restore -p:PackageVersion=$VERSION
+          else
+            dotnet pack src/ILinkBotSDK/ILinkBotSDK.csproj --configuration Release --no-restore
+          fi
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
