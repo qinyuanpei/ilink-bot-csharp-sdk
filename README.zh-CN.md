@@ -100,9 +100,41 @@ src/ILinkBotSDK/
 └── ILinkBot.cs      # 主类
 ```
 
+## 示例
+
+### EchoBot
+一个简单的回声机器人，对收到的消息加上前缀回复。
+
+```bash
+cd example/EchoBot
+dotnet run
+```
+
+功能：
+- 自动回复 "[Bot]" 前缀
+- 支持文本、图片、视频、文件、语音消息
+
+### MEAIBot
+集成 OpenAI 或 Anthropic AI 的智能机器人，支持多轮对话。
+
+```bash
+cd example/MEAIBot
+
+# 复制并配置环境文件
+cp .env.example .env
+# 编辑 .env 填入你的 API 密钥
+
+dotnet run
+```
+
+功能：
+- 集成 OpenAI 或 Anthropic（通过 Microsoft.Extensions.AI）
+- 每个用户独立的对话历史
+- 正在输入状态指示
+
 ## 致谢
 
-本项目基于 [openclaw-weixin](https://github.com/echoxu/openclaw-weixin) 项目开发，该项目提供了微信 iLink Bot 协议的完整实现参考。
+本项目基于 [openclaw-weixin](https://github.com/hao-ji-xing/openclaw-weixin) 项目开发，该项目提供了微信 iLink Bot 协议的完整实现参考。
 
 ## 许可证
 
