@@ -17,6 +17,7 @@ public class ILinkBot : IAsyncDisposable
     private readonly QrCodeLoginService _loginService;
     private readonly MessageReceiver _messageReceiver;
     private readonly MessageSender _messageSender;
+    private readonly CdnUploader _cdnUploader;
     private readonly ILogger<ILinkBot>? _logger;
 
     private bool _isConnected;
@@ -64,6 +65,7 @@ public class ILinkBot : IAsyncDisposable
         _loginService = new QrCodeLoginService(_apiClient);
         _messageReceiver = new MessageReceiver(_apiClient, _stateStorage);
         _messageSender = new MessageSender(_apiClient, _stateStorage);
+        _cdnUploader = new CdnUploader(_apiClient);
         _logger = logger;
     }
 
@@ -234,6 +236,63 @@ public class ILinkBot : IAsyncDisposable
         }
 
         return await _messageSender.SendTextAsync(to, text);
+    }
+
+    /// <summary>
+    /// Send file message
+    /// </summary>
+    /// <param name="to">Recipient user ID</param>
+    /// <param name="filePath">Local file path</param>
+    /// <returns>Whether sending was successful</returns>
+    public async Task<bool> SendFileAsync(string to, string filePath)
+    {
+        if (!_isConnected)
+        {
+            throw new InvalidOperationException("Not connected. Please call LoginAsync first.");
+        }
+
+        if (!File.Exists(filePath))
+        {
+            _logger?.LogError("File not found: {FilePath}", filePath);
+            return false;
+        }
+
+        try
+        {
+            // Determine media type based on file extension
+            var ext = Path.GetExtension(filePath).ToLowerInvariant();
+            var mediaType = GetMediaType(ext);
+
+            // Read file bytes
+            var data = await File.ReadAllBytesAsync(filePath);
+
+            // Upload to CDN
+            var uploaded = await _cdnUploader.UploadAsync(data, to, mediaType);
+            if (uploaded == null)
+            {
+                _logger?.LogError("Failed to upload file to CDN");
+                return false;
+            }
+
+            // Send message with file
+            return await _messageSender.SendFileAsync(to, uploaded);
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogError(ex, "Failed to send file {FilePath}", filePath);
+            return false;
+        }
+    }
+
+    private static int GetMediaType(string extension)
+    {
+        return extension switch
+        {
+            ".jpg" or ".jpeg" or ".png" or ".gif" or ".bmp" or ".webp" => UploadMediaType.Image,
+            ".mp4" or ".avi" or ".mov" or ".wmv" or ".flv" => UploadMediaType.Video,
+            ".mp3" or ".wav" or ".aac" or ".ogg" or ".m4a" => UploadMediaType.Voice,
+            _ => UploadMediaType.File
+        };
     }
 
     /// <summary>

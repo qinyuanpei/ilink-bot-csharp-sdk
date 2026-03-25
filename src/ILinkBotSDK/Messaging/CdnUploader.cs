@@ -71,7 +71,8 @@ public class CdnUploader
             DownloadParam = downloadParam,
             AesKeyHex = aesKeyHex,
             FileSize = data.Length,
-            CipherSize = encrypted.Length
+            CipherSize = encrypted.Length,
+            FileMd5 = rawMd5
         };
     }
 
@@ -146,4 +147,9 @@ public class UploadedFile
     /// Encrypted file size in bytes
     /// </summary>
     public int CipherSize { get; set; }
+
+    /// <summary>
+    /// File MD5 hash
+    /// </summary>
+    public string? FileMd5 { get; set; }
 }

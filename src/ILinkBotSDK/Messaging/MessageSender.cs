@@ -153,4 +153,56 @@ public class MessageSender
     {
         await _stateStorage.SaveContextTokenAsync(userId, contextToken);
     }
+
+    /// <summary>
+    /// Send file message
+    /// </summary>
+    public async Task<bool> SendFileAsync(string to, UploadedFile uploaded)
+    {
+        var contextToken = await _stateStorage.GetContextTokenAsync(to);
+        if (string.IsNullOrEmpty(contextToken))
+        {
+            _logger?.LogError("No context token available for user {To}", to);
+            return false;
+        }
+
+        try
+        {
+            var message = new WeixinMessage
+            {
+                FromUserId = string.Empty,
+                ToUserId = to,
+                ClientId = Guid.NewGuid().ToString(),
+                MessageType = MessageType.Bot,
+                MessageState = MessageState.Finish,
+                ContextToken = contextToken,
+                ItemList = new List<MessageItem>
+                {
+                    new MessageItem
+                    {
+                        Type = MessageItemType.File,
+                        FileItem = new FileItem
+                        {
+                            Media = new CdnMedia
+                            {
+                                EncryptQueryParam = uploaded.DownloadParam,
+                                AesKey = uploaded.AesKeyHex,
+                                EncryptType = 2
+                            },
+                            Md5 = uploaded.FileMd5,
+                            Len = uploaded.FileSize.ToString()
+                        }
+                    }
+                }
+            };
+
+            var response = await _apiClient.SendMessageAsync(message);
+            return response.IsSuccess;
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogError(ex, "Failed to send file to {To}", to);
+            return false;
+        }
+    }
 }
