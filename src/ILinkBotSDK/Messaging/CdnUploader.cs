@@ -22,17 +22,27 @@ public class CdnUploader
     /// <summary>
     /// Upload file to CDN
     /// </summary>
-    /// <param name="data">File data</param>
     /// <param name="toUserId">Recipient user ID</param>
-    /// <param name="mediaType">Media type</param>
+    /// <param name="filePath">Local file path</param>
     /// <param name="ct">Cancellation token</param>
     /// <returns>Uploaded file info with download parameters</returns>
     public async Task<UploadedFile> UploadAsync(
-        byte[] data,
         string toUserId,
-        int mediaType,
+        string filePath,
         CancellationToken ct = default)
     {
+        if (!File.Exists(filePath))
+        {
+            throw new FileNotFoundException("File not found", filePath);
+        }
+
+        // Read file bytes
+        var data = await File.ReadAllBytesAsync(filePath, ct);
+
+        // Determine media type based on file extension
+        var ext = Path.GetExtension(filePath).ToLowerInvariant();
+        var mediaType = GetMediaType(ext);
+
         // Generate random fileKey and AES key (16 bytes each)
         byte[] fileKeyBytes = RandomNumberGenerator.GetBytes(16);
         byte[] aesKeyBytes = RandomNumberGenerator.GetBytes(16);
@@ -72,7 +82,20 @@ public class CdnUploader
             AesKeyHex = aesKeyHex,
             FileSize = data.Length,
             CipherSize = encrypted.Length,
-            FileMd5 = rawMd5
+            FileMd5 = rawMd5,
+            FileName = Path.GetFileName(filePath),
+            MediaType = mediaType
+        };
+    }
+
+    private static int GetMediaType(string extension)
+    {
+        return extension switch
+        {
+            ".jpg" or ".jpeg" or ".png" or ".gif" or ".bmp" or ".webp" => UploadMediaType.Image,
+            ".mp4" or ".avi" or ".mov" or ".wmv" or ".flv" => UploadMediaType.Video,
+            ".mp3" or ".wav" or ".aac" or ".ogg" or ".m4a" => UploadMediaType.Voice,
+            _ => UploadMediaType.File
         };
     }
 
@@ -121,35 +144,4 @@ public class CdnUploader
         cs.FlushFinalBlock();
         return ms.ToArray();
     }
-}
-
-/// <summary>
-/// Uploaded file info
-/// </summary>
-public class UploadedFile
-{
-    /// <summary>
-    /// Download parameter (from CDN response header)
-    /// </summary>
-    public string? DownloadParam { get; set; }
-
-    /// <summary>
-    /// AES key in hex format
-    /// </summary>
-    public string? AesKeyHex { get; set; }
-
-    /// <summary>
-    /// Original file size in bytes
-    /// </summary>
-    public int FileSize { get; set; }
-
-    /// <summary>
-    /// Encrypted file size in bytes
-    /// </summary>
-    public int CipherSize { get; set; }
-
-    /// <summary>
-    /// File MD5 hash
-    /// </summary>
-    public string? FileMd5 { get; set; }
 }

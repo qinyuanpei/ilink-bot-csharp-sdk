@@ -251,28 +251,10 @@ public class ILinkBot : IAsyncDisposable
             throw new InvalidOperationException("Not connected. Please call LoginAsync first.");
         }
 
-        if (!File.Exists(filePath))
-        {
-            _logger?.LogError("File not found: {FilePath}", filePath);
-            return false;
-        }
-
         try
         {
-            // Determine media type based on file extension
-            var ext = Path.GetExtension(filePath).ToLowerInvariant();
-            var mediaType = GetMediaType(ext);
-
-            // Read file bytes
-            var data = await File.ReadAllBytesAsync(filePath);
-
             // Upload to CDN
-            var uploaded = await _cdnUploader.UploadAsync(data, to, mediaType);
-            if (uploaded == null)
-            {
-                _logger?.LogError("Failed to upload file to CDN");
-                return false;
-            }
+            var uploaded = await _cdnUploader.UploadAsync(to, filePath);
 
             // Send message with file
             return await _messageSender.SendFileAsync(to, uploaded);
@@ -282,17 +264,6 @@ public class ILinkBot : IAsyncDisposable
             _logger?.LogError(ex, "Failed to send file {FilePath}", filePath);
             return false;
         }
-    }
-
-    private static int GetMediaType(string extension)
-    {
-        return extension switch
-        {
-            ".jpg" or ".jpeg" or ".png" or ".gif" or ".bmp" or ".webp" => UploadMediaType.Image,
-            ".mp4" or ".avi" or ".mov" or ".wmv" or ".flv" => UploadMediaType.Video,
-            ".mp3" or ".wav" or ".aac" or ".ogg" or ".m4a" => UploadMediaType.Voice,
-            _ => UploadMediaType.File
-        };
     }
 
     /// <summary>

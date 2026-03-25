@@ -183,6 +183,7 @@ public class MessageSender
                         Type = MessageItemType.File,
                         FileItem = new FileItem
                         {
+                            FileName = uploaded.FileName,
                             Media = new CdnMedia
                             {
                                 EncryptQueryParam = uploaded.DownloadParam,

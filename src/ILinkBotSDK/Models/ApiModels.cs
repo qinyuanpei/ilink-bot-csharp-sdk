@@ -225,3 +225,44 @@ public class GetUploadUrlResponse : ApiResponse
     [JsonPropertyName("thumb_upload_param")]
     public string? ThumbUploadParam { get; set; }
 }
+
+/// <summary>
+/// Uploaded file info
+/// </summary>
+public class UploadedFile
+{
+    /// <summary>
+    /// Download parameter (from CDN response header)
+    /// </summary>
+    public string? DownloadParam { get; set; }
+
+    /// <summary>
+    /// AES key in hex format
+    /// </summary>
+    public string? AesKeyHex { get; set; }
+
+    /// <summary>
+    /// Original file size in bytes
+    /// </summary>
+    public int FileSize { get; set; }
+
+    /// <summary>
+    /// Encrypted file size in bytes
+    /// </summary>
+    public int CipherSize { get; set; }
+
+    /// <summary>
+    /// File MD5 hash
+    /// </summary>
+    public string? FileMd5 { get; set; }
+
+    /// <summary>
+    /// File name
+    /// </summary>
+    public string? FileName { get; set; }
+
+    /// <summary>
+    /// Media type
+    /// </summary>
+    public int MediaType { get; set; }
+}
