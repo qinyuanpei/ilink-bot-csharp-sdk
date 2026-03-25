@@ -1,6 +1,5 @@
 using ILinkBotSDK.Api;
 using ILinkBotSDK.Models;
-using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Security.Cryptography;
 using System.Text;
@@ -10,12 +9,24 @@ namespace ILinkBotSDK.Messaging;
 /// <summary>
 /// CDN helper for uploading and downloading files
 /// </summary>
+/// <remarks>
+/// Provides methods to:
+/// <list type="bullet">
+///   <item>Upload local files to WeChat CDN</item>
+///   <item>Upload files from remote URLs</item>
+///   <item>Download files from WeChat CDN</item>
+/// </list>
+/// </remarks>
 public class CdnHelper
 {
     private const string CdnBaseUrl = "https://novac2c.cdn.weixin.qq.com/c2c";
 
     private readonly WeixinApiClient _apiClient;
 
+    /// <summary>
+    /// Creates a new CDN helper
+    /// </summary>
+    /// <param name="apiClient">WeChat API client</param>
     public CdnHelper(WeixinApiClient apiClient)
     {
         _apiClient = apiClient;
@@ -28,7 +39,7 @@ public class CdnHelper
     /// <param name="filePath">Local file path</param>
     /// <param name="ct">Cancellation token</param>
     /// <returns>Uploaded file info with download parameters</returns>
-    public async Task<UploadedFile> UploadAsync(
+    public async Task<UploadedFile> UploadFileAsync(
         string toUserId,
         string filePath,
         CancellationToken ct = default)
@@ -108,7 +119,7 @@ public class CdnHelper
         try
         {
             // Upload the downloaded file
-            var uploaded = await UploadAsync(toUserId, tempPath, ct);
+            var uploaded = await UploadFileAsync(toUserId, tempPath, ct);
             return uploaded;
         }
         finally
@@ -187,7 +198,7 @@ public class CdnHelper
             return false;
         }
 
-        return await DownloadAsync(media.EncryptQueryParam, media.AesKey, filePath, ct);
+        return await DownloadFileAsync(media.EncryptQueryParam, media.AesKey, filePath, ct);
     }
 
     /// <summary>
@@ -198,7 +209,7 @@ public class CdnHelper
     /// <param name="filePath">Local path to save the file</param>
     /// <param name="ct">Cancellation token</param>
     /// <returns>Whether download was successful</returns>
-    private async Task<bool> DownloadAsync(string encryptQueryParam, string? aesKey, string filePath, CancellationToken ct = default)
+    private async Task<bool> DownloadFileAsync(string encryptQueryParam, string? aesKey, string filePath, CancellationToken ct = default)
     {
         if (string.IsNullOrEmpty(encryptQueryParam))
         {
