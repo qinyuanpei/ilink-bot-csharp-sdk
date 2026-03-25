@@ -1,20 +1,20 @@
-using System.Security.Cryptography;
-using System.Text;
 using ILinkBotSDK.Api;
 using ILinkBotSDK.Models;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace ILinkBotSDK.Messaging;
 
 /// <summary>
-/// CDN file uploader
+/// CDN helper for uploading and downloading files
 /// </summary>
-public class CdnUploader
+public class CdnHelper
 {
     private const string CdnBaseUrl = "https://novac2c.cdn.weixin.qq.com/c2c";
 
     private readonly WeixinApiClient _apiClient;
 
-    public CdnUploader(WeixinApiClient apiClient)
+    public CdnHelper(WeixinApiClient apiClient)
     {
         _apiClient = apiClient;
     }
@@ -82,10 +82,61 @@ public class CdnUploader
             AesKeyHex = aesKeyHex,
             FileSize = data.Length,
             CipherSize = encrypted.Length,
-            FileMd5 = rawMd5,
             FileName = Path.GetFileName(filePath),
-            MediaType = mediaType
+            MediaType = mediaType,
+            FileMd5 = rawMd5
         };
+    }
+
+    /// <summary>
+    /// Download file from CDN
+    /// </summary>
+    /// <param name="media">CDN media info from received message</param>
+    /// <param name="savePath">Local path to save the file</param>
+    /// <param name="ct">Cancellation token</param>
+    /// <returns>Whether download was successful</returns>
+    public async Task<bool> DownloadAsync(CdnMedia media, string savePath, CancellationToken ct = default)
+    {
+        if (media == null || string.IsNullOrEmpty(media.EncryptQueryParam))
+        {
+            return false;
+        }
+
+        try
+        {
+            // Build CDN download URL
+            var url = $"{CdnBaseUrl}/download" +
+                      $"?encrypted_query_param={Uri.EscapeDataString(media.EncryptQueryParam)}";
+
+            using var httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(60) };
+            var response = await httpClient.GetAsync(url, ct);
+            if (!response.IsSuccessStatusCode)
+            {
+                return false;
+            }
+
+            var data = await response.Content.ReadAsByteArrayAsync(ct);
+
+            // Decrypt if AES key is provided
+            if (!string.IsNullOrEmpty(media.AesKey))
+            {
+                data = DecryptAesEcb(data, media.AesKey);
+            }
+
+            // Ensure directory exists
+            var directory = Path.GetDirectoryName(savePath);
+            if (!string.IsNullOrEmpty(directory))
+            {
+                Directory.CreateDirectory(directory);
+            }
+
+            await File.WriteAllBytesAsync(savePath, data, ct);
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     private static int GetMediaType(string extension)
@@ -123,9 +174,9 @@ public class CdnUploader
             throw new HttpRequestException($"CDN upload HTTP {(int)response.StatusCode}: {body}");
         }
 
-        string downloadParam = response.Headers.TryGetValues("X-Encrypted-Param", out var vals)
+        string downloadParam = response.Headers.TryGetValues("x-encrypted-param", out var vals)
             ? vals.First()
-            : throw new InvalidOperationException("CDN upload: missing X-Encrypted-Param header");
+            : throw new InvalidOperationException("CDN upload: missing x-encrypted-param header");
 
         return downloadParam;
     }
@@ -138,10 +189,20 @@ public class CdnUploader
         aes.Padding = PaddingMode.PKCS7;
 
         using var encryptor = aes.CreateEncryptor();
-        using var ms = new MemoryStream();
-        using var cs = new CryptoStream(ms, encryptor, CryptoStreamMode.Write);
-        cs.Write(plaintext);
-        cs.FlushFinalBlock();
-        return ms.ToArray();
+        return encryptor.TransformFinalBlock(plaintext, 0, plaintext.Length);
+    }
+
+    private static byte[] DecryptAesEcb(byte[] ciphertext, string aesKeyBase64)
+    {
+        // Convert base64 AES key to bytes
+        byte[] key = Convert.FromBase64String(aesKeyBase64);
+
+        using var aes = Aes.Create();
+        aes.Key = key;
+        aes.Mode = CipherMode.ECB;
+        aes.Padding = PaddingMode.PKCS7;
+
+        using var decryptor = aes.CreateDecryptor();
+        return decryptor.TransformFinalBlock(ciphertext, 0, ciphertext.Length);
     }
 }

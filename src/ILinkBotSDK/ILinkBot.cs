@@ -17,7 +17,7 @@ public class ILinkBot : IAsyncDisposable
     private readonly QrCodeLoginService _loginService;
     private readonly MessageReceiver _messageReceiver;
     private readonly MessageSender _messageSender;
-    private readonly CdnUploader _cdnUploader;
+    private readonly CdnHelper _cdnHelper;
     private readonly ILogger<ILinkBot>? _logger;
 
     private bool _isConnected;
@@ -65,7 +65,7 @@ public class ILinkBot : IAsyncDisposable
         _loginService = new QrCodeLoginService(_apiClient);
         _messageReceiver = new MessageReceiver(_apiClient, _stateStorage);
         _messageSender = new MessageSender(_apiClient, _stateStorage);
-        _cdnUploader = new CdnUploader(_apiClient);
+        _cdnHelper = new CdnHelper(_apiClient);
         _logger = logger;
     }
 
@@ -254,7 +254,7 @@ public class ILinkBot : IAsyncDisposable
         try
         {
             // Upload to CDN
-            var uploaded = await _cdnUploader.UploadAsync(to, filePath);
+            var uploaded = await _cdnHelper.UploadAsync(to, filePath);
 
             // Send message with file
             return await _messageSender.SendFileAsync(to, uploaded);
