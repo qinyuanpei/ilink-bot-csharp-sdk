@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using ILinkBotSDK.Api;
+using QRCoder;
 
 namespace ILinkBotSDK.Auth;
 
@@ -32,7 +33,7 @@ public class QrCodeLoginService
         if (!force && !string.IsNullOrEmpty(_currentQrCode))
         {
             // Display existing QR code
-            QrCodeRenderer.PrintQrCode(_currentQrCode);
+            PrintQRCode(_currentQrCode);
             Console.WriteLine("QR code is ready, please scan with WeChat");
             Console.WriteLine();
 
@@ -59,12 +60,12 @@ public class QrCodeLoginService
             // Display QR code in console
             Console.Clear();
             Console.WriteLine();
-            Console.WriteLine("╔════════════════════════════════════════════════════════════╗");
-            Console.WriteLine("║                    WeChat iLink Login                     ║");
-            Console.WriteLine("╚════════════════════════════════════════════════════════════╝");
+            Console.WriteLine("════════════════════════════════════════════════════════════");
+            Console.WriteLine("                    WeChat iLink Login                      ");
+            Console.WriteLine("════════════════════════════════════════════════════════════");
             Console.WriteLine();
 
-            QrCodeRenderer.PrintQrCode(qrResponse.QrcodeImgContent);
+            PrintQRCode(qrResponse.QrcodeImgContent);
 
             Console.WriteLine("Please scan the QR code above with WeChat");
             Console.WriteLine("After scanning, please click \"Confirm Login\"");
@@ -245,6 +246,23 @@ public class QrCodeLoginService
             Success = false,
             Message = "Login timeout, please try again"
         };
+    }
+
+    private void PrintQRCode(string content)
+    {
+        try
+        {
+            using var generator = new QRCodeGenerator();
+            using var data = generator.CreateQrCode(content, QRCodeGenerator.ECCLevel.L);
+            using var code = new AsciiQRCode(data);
+            string ascii = code.GetGraphic(1, drawQuietZones: true);
+            Console.WriteLine(ascii);
+        }
+        catch
+        {
+            // Fallback: print the URL itself
+            Console.WriteLine($"(QR rendering failed — open in browser: {content})");
+        }
     }
 
     private void ClearSession()
