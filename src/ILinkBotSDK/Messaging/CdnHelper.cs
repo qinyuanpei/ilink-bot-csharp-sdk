@@ -1,5 +1,7 @@
 using ILinkBotSDK.Api;
 using ILinkBotSDK.Models;
+using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Security.Cryptography;
 using System.Text;
 
@@ -89,15 +91,116 @@ public class CdnHelper
     }
 
     /// <summary>
+    /// Upload file from URL to CDN
+    /// </summary>
+    /// <param name="toUserId">Recipient user ID</param>
+    /// <param name="url">Source URL to download from</param>
+    /// <param name="ct">Cancellation token</param>
+    /// <returns>Uploaded file info with download parameters</returns>
+    public async Task<UploadedFile> UploadFromUrlAsync(
+        string toUserId,
+        string url,
+        CancellationToken ct = default)
+    {
+        // Download file to temp location
+        var tempPath = await DownloadToTempAsync(url, ct);
+
+        try
+        {
+            // Upload the downloaded file
+            var uploaded = await UploadAsync(toUserId, tempPath, ct);
+            return uploaded;
+        }
+        finally
+        {
+            // Clean up temp file
+            if (File.Exists(tempPath))
+            {
+                File.Delete(tempPath);
+            }
+        }
+    }
+
+    private async Task<string> DownloadToTempAsync(string url, CancellationToken ct)
+    {
+        using var httpClient = new HttpClient { Timeout = TimeSpan.FromMinutes(5) };
+
+        var response = await httpClient.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct);
+        response.EnsureSuccessStatusCode();
+
+        // Try to get filename from Content-Disposition header
+        var fileName = GetFileNameFromHeaders(response.Headers, response.RequestMessage?.RequestUri);
+
+        // Create temp file
+        var tempDir = Path.Combine(Path.GetTempPath(), "ILinkBotSDK");
+        Directory.CreateDirectory(tempDir);
+        var tempPath = Path.Combine(tempDir, fileName);
+
+        // Download content
+        using var contentStream = await response.Content.ReadAsStreamAsync(ct);
+        using var fileStream = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None, 81920, true);
+        await contentStream.CopyToAsync(fileStream, ct);
+
+        return tempPath;
+    }
+
+    private static string GetFileNameFromHeaders(HttpHeaders headers, Uri? requestUri)
+    {
+        // Try Content-Disposition header
+        if (headers.TryGetValues("Content-Disposition", out var cdValues))
+        {
+            foreach (var cd in cdValues)
+            {
+                var match = System.Text.RegularExpressions.Regex.Match(cd, @"filename\*?=""?([^"";]+)");
+                if (match.Success)
+                {
+                    return match.Groups[1].Value;
+                }
+            }
+        }
+
+        // Fall back to URL path
+        if (requestUri != null && !string.IsNullOrEmpty(requestUri.AbsolutePath))
+        {
+            var fileName = Path.GetFileName(requestUri.AbsolutePath);
+            if (!string.IsNullOrEmpty(fileName))
+            {
+                return fileName;
+            }
+        }
+
+        // Default filename
+        return $"download_{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}";
+    }
+
+    /// <summary>
     /// Download file from CDN
     /// </summary>
     /// <param name="media">CDN media info from received message</param>
-    /// <param name="savePath">Local path to save the file</param>
+    /// <param name="filePath">Local path to save the file</param>
     /// <param name="ct">Cancellation token</param>
     /// <returns>Whether download was successful</returns>
-    public async Task<bool> DownloadAsync(CdnMedia media, string savePath, CancellationToken ct = default)
+    public async Task<bool> DownloadAsync(CdnMedia media, string filePath, CancellationToken ct = default)
     {
         if (media == null || string.IsNullOrEmpty(media.EncryptQueryParam))
+        {
+            return false;
+        }
+
+        return await DownloadAsync(media.EncryptQueryParam, media.AesKey, filePath, ct);
+    }
+
+    /// <summary>
+    /// Download file from CDN
+    /// </summary>
+    /// <param name="encryptQueryParam">Encrypted query parameter from CDN</param>
+    /// <param name="aesKey">AES key (base64 encoded or hex string)</param>
+    /// <param name="filePath">Local path to save the file</param>
+    /// <param name="ct">Cancellation token</param>
+    /// <returns>Whether download was successful</returns>
+    private async Task<bool> DownloadAsync(string encryptQueryParam, string? aesKey, string filePath, CancellationToken ct = default)
+    {
+        if (string.IsNullOrEmpty(encryptQueryParam))
         {
             return false;
         }
@@ -106,7 +209,7 @@ public class CdnHelper
         {
             // Build CDN download URL
             var url = $"{CdnBaseUrl}/download" +
-                      $"?encrypted_query_param={Uri.EscapeDataString(media.EncryptQueryParam)}";
+                      $"?encrypted_query_param={Uri.EscapeDataString(encryptQueryParam)}";
 
             using var httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(60) };
             var response = await httpClient.GetAsync(url, ct);
@@ -118,22 +221,22 @@ public class CdnHelper
             var data = await response.Content.ReadAsByteArrayAsync(ct);
 
             // Decrypt if AES key is provided
-            if (!string.IsNullOrEmpty(media.AesKey))
+            if (!string.IsNullOrEmpty(aesKey))
             {
-                data = DecryptAesEcb(data, media.AesKey);
+                data = DecryptAesEcb(data, aesKey);
             }
 
             // Ensure directory exists
-            var directory = Path.GetDirectoryName(savePath);
+            var directory = Path.GetDirectoryName(filePath);
             if (!string.IsNullOrEmpty(directory))
             {
                 Directory.CreateDirectory(directory);
             }
 
-            await File.WriteAllBytesAsync(savePath, data, ct);
+            await File.WriteAllBytesAsync(filePath, data, ct);
             return true;
         }
-        catch
+        catch (Exception ex)
         {
             return false;
         }
@@ -192,10 +295,27 @@ public class CdnHelper
         return encryptor.TransformFinalBlock(plaintext, 0, plaintext.Length);
     }
 
-    private static byte[] DecryptAesEcb(byte[] ciphertext, string aesKeyBase64)
+    private static byte[] DecryptAesEcb(byte[] ciphertext, string aesKey)
     {
-        // Convert base64 AES key to bytes
-        byte[] key = Convert.FromBase64String(aesKeyBase64);
+        // Parse AES key: base64 decode first, then check if it's raw or hex-encoded
+        // - If decoded is 16 bytes -> raw key
+        // - If decoded is 32 bytes hex string -> convert hex to 16 bytes
+        byte[] decoded = Convert.FromBase64String(aesKey);
+
+        byte[] key;
+        if (decoded.Length == 16)
+        {
+            key = decoded;
+        }
+        else if (decoded.Length == 32 && IsHexString(Encoding.ASCII.GetString(decoded)))
+        {
+            // Hex-encoded key: convert hex string to raw bytes
+            key = Convert.FromHexString(decoded);
+        }
+        else
+        {
+            throw new ArgumentException($"Invalid AES key length: {decoded.Length}");
+        }
 
         using var aes = Aes.Create();
         aes.Key = key;
@@ -204,5 +324,15 @@ public class CdnHelper
 
         using var decryptor = aes.CreateDecryptor();
         return decryptor.TransformFinalBlock(ciphertext, 0, ciphertext.Length);
+    }
+
+    private static bool IsHexString(string s)
+    {
+        foreach (char c in s)
+        {
+            if (!char.IsAsciiHexDigit(c))
+                return false;
+        }
+        return true;
     }
 }

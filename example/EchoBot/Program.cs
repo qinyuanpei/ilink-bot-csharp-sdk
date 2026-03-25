@@ -50,8 +50,10 @@ try
                 }
                 else if (item.FileItem != null)
                 {
-                    text = item.FileItem.FileName;
-
+                    var fileItem = item.FileItem;
+                    var filePath = Path.Combine(AppContext.BaseDirectory, fileItem.FileName!);
+                    await bot.File.DownloadAsync(fileItem.Media!, filePath);
+                    text = $"已接收文件{fileItem.FileName}";
                 }
                 else if (item.VoiceItem != null)
                 {
@@ -70,6 +72,10 @@ try
                 var success = await bot.SendAsync(msg.FromUserId!, reply);
                 Console.WriteLine($"发送结果: {(success ? "成功" : "失败")}");
                 Console.WriteLine();
+
+                await bot.SendFileAsync(msg.FromUserId!, "D:\\Documents\\MCP-Training\\MCP_For_.NET_Developers.pptx");
+                await bot.SendFileAsync(msg.FromUserId!, "D:\\Documents\\MCP-Training\\MCP_vs_Function_Calling.jpg");
+                await bot.SendRemoteFileAsync(msg.FromUserId!, "https://raw.githubusercontent.com/HKUDS/nanobot/b5302b6f3da12e39caad98e9a82fce47880d5c77/nanobot/channels/weixin.py");
             }
         }
         catch (OperationCanceledException)

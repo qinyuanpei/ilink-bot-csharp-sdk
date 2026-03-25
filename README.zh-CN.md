@@ -47,7 +47,7 @@ while (bot.IsConnected)
         Console.WriteLine($"收到消息: {text}");
 
         // 回复
-        await bot.SendAsync(msg.FromUserId!, "回复: " + text);
+        await bot.SendTextAsync(msg.FromUserId!, "回复: " + text);
     }
 }
 
@@ -80,7 +80,9 @@ await bot.CloseAsync();
 |-----------|------|
 | `LoginAsync(force=false)` | 扫码登录，已有凭证则自动复用 |
 | `RecvAsync(timeout=35s)` | 长轮询接收消息 |
-| `SendAsync(to, text)` | 发送文本消息 |
+| `SendTextAsync(to, text)` | 发送文本消息 |
+| `SendFileAsync(to, filePath)` | 发送本地文件 |
+| `SendRemoteFileAsync(to, url)` | 发送远程文件（URL） |
 | `SendTypingAsync(to)` | 发送"正在输入"状态 |
 | `StopTypingAsync(to)` | 取消"正在输入"状态 |
 | `CloseAsync()` | 保存状态并清理 |

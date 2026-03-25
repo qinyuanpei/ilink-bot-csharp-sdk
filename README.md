@@ -47,7 +47,7 @@ while (bot.IsConnected)
         Console.WriteLine($"Received: {text}");
 
         // Reply
-        await bot.SendAsync(msg.FromUserId!, "Echo: " + text);
+        await bot.SendTextAsync(msg.FromUserId!, "Echo: " + text);
     }
 }
 
@@ -80,7 +80,9 @@ await bot.CloseAsync();
 |-----------------|-------------|
 | `LoginAsync(force=false)` | Login via QR code, auto-reuse credentials if available |
 | `RecvAsync(timeout=35s)` | Long poll for messages |
-| `SendAsync(to, text)` | Send text message |
+| `SendTextAsync(to, text)` | Send text message |
+| `SendFileAsync(to, filePath)` | Send file from local path |
+| `SendRemoteFileAsync(to, url)` | Send file from URL |
 | `SendTypingAsync(to)` | Send typing status |
 | `StopTypingAsync(to)` | Cancel typing status |
 | `CloseAsync()` | Save state and cleanup |

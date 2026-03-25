@@ -41,6 +41,11 @@ public class ILinkBot : IAsyncDisposable
     public string? UserId => _userId;
 
     /// <summary>
+    /// CdnHlper
+    /// </summary>
+    public CdnHelper File => _cdnHelper;
+
+    /// <summary>
     /// Create ILinkBot instance
     /// </summary>
     /// <param name="options">Options</param>
@@ -228,7 +233,7 @@ public class ILinkBot : IAsyncDisposable
     /// <param name="to">Recipient user ID</param>
     /// <param name="text">Text content</param>
     /// <returns>Whether sending was successful</returns>
-    public async Task<bool> SendAsync(string to, string text)
+    public async Task<bool> SendTextAsync(string to, string text)
     {
         if (!_isConnected)
         {
@@ -262,6 +267,28 @@ public class ILinkBot : IAsyncDisposable
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Failed to send file {FilePath}", filePath);
+            return false;
+        }
+    }
+
+    public async Task<bool> SendRemoteFileAsync(string to, string url)
+    {
+        if (!_isConnected)
+        {
+            throw new InvalidOperationException("Not connected. Please call LoginAsync first.");
+        }
+
+        try
+        {
+            // Upload to CDN
+            var uploaded = await _cdnHelper.UploadFromUrlAsync(to, url);
+
+            // Send message with file
+            return await _messageSender.SendFileAsync(to, uploaded);
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogError(ex, "Failed to send url {FilePath}", url);
             return false;
         }
     }
@@ -316,6 +343,7 @@ public class ILinkBot : IAsyncDisposable
     public async ValueTask DisposeAsync()
     {
         await CloseAsync();
+
         _disposed = true;
         GC.SuppressFinalize(this);
     }
