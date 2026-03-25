@@ -175,60 +175,34 @@ public class MessageSender
                 EncryptType = 2
             };
 
-            MessageItem messageItem;
-            switch (uploaded.MediaType)
+            var messageItem = uploaded.MediaType switch
             {
-                case UploadMediaType.Image:
-                    messageItem = new MessageItem
+                UploadMediaType.Image => new MessageItem
+                {
+                    Type = MessageItemType.Image,
+                    ImageItem = new ImageItem { Media = cdnMedia }
+                },
+                UploadMediaType.Video => new MessageItem
+                {
+                    Type = MessageItemType.Video,
+                    VideoItem = new VideoItem { Media = cdnMedia, VideoSize = uploaded.CipherSize }
+                },
+                UploadMediaType.Voice => new MessageItem
+                {
+                    Type = MessageItemType.Voice,
+                    VoiceItem = new VoiceItem { Media = cdnMedia }
+                },
+                _ => new MessageItem
+                {
+                    Type = MessageItemType.File,
+                    FileItem = new FileItem
                     {
-                        Type = MessageItemType.Image,
-                        ImageItem = new ImageItem
-                        {
-                            Media = cdnMedia
-                        }
-                    };
-                    break;
-
-                case UploadMediaType.Video:
-                    messageItem = new MessageItem
-                    {
-                        Type = MessageItemType.Video,
-                        VideoItem = new VideoItem
-                        {
-                            Media = cdnMedia,
-                            VideoMd5 = uploaded.FileMd5,
-                            VideoSize = uploaded.FileSize
-                        }
-                    };
-                    break;
-
-                case UploadMediaType.Voice:
-                    messageItem = new MessageItem
-                    {
-                        Type = MessageItemType.Voice,
-                        VoiceItem = new VoiceItem
-                        {
-                            Media = cdnMedia,
-                            Text = uploaded.FileName
-                        }
-                    };
-                    break;
-
-                case UploadMediaType.File:
-                default:
-                    messageItem = new MessageItem
-                    {
-                        Type = MessageItemType.File,
-                        FileItem = new FileItem
-                        {
-                            FileName = uploaded.FileName,
-                            Media = cdnMedia,
-                            Md5 = uploaded.FileMd5,
-                            Len = uploaded.FileSize.ToString()
-                        }
-                    };
-                    break;
-            }
+                        Media = cdnMedia,
+                        FileName = uploaded.FileName,
+                        Len = uploaded.FileSize.ToString()
+                    }
+                }
+            };
 
             var message = new WeixinMessage
             {
