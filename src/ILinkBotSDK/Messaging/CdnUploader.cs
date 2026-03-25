@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using System.Text;
 using ILinkBotSDK.Api;
 using ILinkBotSDK.Models;
 
@@ -9,6 +10,8 @@ namespace ILinkBotSDK.Messaging;
 /// </summary>
 public class CdnUploader
 {
+    private const string CdnBaseUrl = "https://novac2c.cdn.weixin.qq.com/c2c";
+
     private readonly WeixinApiClient _apiClient;
 
     public CdnUploader(WeixinApiClient apiClient)
@@ -19,86 +22,103 @@ public class CdnUploader
     /// <summary>
     /// Upload file to CDN
     /// </summary>
-    /// <param name="fileStream">File stream</param>
-    /// <param name="fileName">File name</param>
-    /// <param name="mediaType">Media type</param>
+    /// <param name="data">File data</param>
     /// <param name="toUserId">Recipient user ID</param>
+    /// <param name="mediaType">Media type</param>
+    /// <param name="ct">Cancellation token</param>
     /// <returns>Uploaded file info with download parameters</returns>
-    public async Task<UploadedFile?> UploadAsync(Stream fileStream, string fileName, int mediaType, string? toUserId = null)
+    public async Task<UploadedFile> UploadAsync(
+        byte[] data,
+        string toUserId,
+        int mediaType,
+        CancellationToken ct = default)
     {
-        // Calculate file size and MD5
-        fileStream.Position = 0;
-        var fileSize = (int)fileStream.Length;
-        var md5 = await CalculateMd5Async(fileStream);
+        // Generate random fileKey and AES key (16 bytes each)
+        byte[] fileKeyBytes = RandomNumberGenerator.GetBytes(16);
+        byte[] aesKeyBytes = RandomNumberGenerator.GetBytes(16);
 
-        fileStream.Position = 0;
+        string fileKeyHex = Convert.ToHexString(fileKeyBytes).ToLowerInvariant();
+        string aesKeyHex = Convert.ToHexString(aesKeyBytes).ToLowerInvariant();
 
-        // Step 1: Get upload URL
-        var uploadUrlRequest = new GetUploadUrlRequest
+        // MD5 of plaintext
+        string rawMd5 = Convert.ToHexString(MD5.HashData(data)).ToLowerInvariant();
+
+        // AES-128-ECB with PKCS7 padding
+        byte[] encrypted = EncryptAesEcb(data, aesKeyBytes);
+
+        var uploadReq = new GetUploadUrlRequest
         {
-            FileKey = Guid.NewGuid().ToString("N"),
+            FileKey = fileKeyHex,
             MediaType = mediaType,
             ToUserId = toUserId,
-            RawSize = fileSize,
-            RawFileMd5 = md5,
-            FileSize = fileSize,
-            NoNeedThumb = true
+            RawSize = data.Length,
+            RawFileMd5 = rawMd5,
+            FileSize = encrypted.Length,
+            NoNeedThumb = true,
+            AesKey = aesKeyHex,
+            BaseInfo = new BaseInfo()
         };
 
-        var uploadUrlResponse = await _apiClient.GetUploadUrlAsync(uploadUrlRequest);
-        if (!uploadUrlResponse.IsSuccess || string.IsNullOrEmpty(uploadUrlResponse.UploadParam))
-        {
-            return null;
-        }
+        var uploadResp = await _apiClient.GetUploadUrlAsync(uploadReq);
+        if (uploadResp.Ret != 0)
+            throw new InvalidOperationException(
+                $"GetUploadUrl failed: ret={uploadResp.Ret} errmsg={uploadResp.ErrMsg}");
 
-        // Step 2: Upload to CDN
-        var uploadSuccess = await UploadToCdnAsync(fileStream, uploadUrlResponse.UploadParam);
-        if (!uploadSuccess)
-        {
-            return null;
-        }
+        string downloadParam = await UploadToCdnAsync(encrypted, uploadResp.UploadParam!, fileKeyHex, ct);
 
-        // Step 3: Return uploaded file info
         return new UploadedFile
         {
-            FileKey = uploadUrlRequest.FileKey,
-            FileSize = fileSize,
-            FileMd5 = md5,
-            FileName = fileName,
-            MediaType = mediaType
+            DownloadParam = downloadParam,
+            AesKeyHex = aesKeyHex,
+            FileSize = data.Length,
+            CipherSize = encrypted.Length
         };
     }
 
-    private async Task<bool> UploadToCdnAsync(Stream fileStream, string uploadParam)
+    /// <summary>
+    /// Convert AES key hex to Base64
+    /// </summary>
+    public static string AesKeyToBase64(string hexKey) =>
+        Convert.ToBase64String(Encoding.UTF8.GetBytes(hexKey));
+
+    private static async Task<string> UploadToCdnAsync(
+        byte[] encrypted, string uploadParam, string fileKey, CancellationToken ct)
     {
-        try
+        string url = $"{CdnBaseUrl}/upload" +
+                     $"?encrypted_query_param={Uri.EscapeDataString(uploadParam)}" +
+                     $"&filekey={Uri.EscapeDataString(fileKey)}";
+
+        using var httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(60) };
+        using var content = new ByteArrayContent(encrypted);
+        content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/octet-stream");
+
+        using var response = await httpClient.PostAsync(url, content, ct);
+        if (!response.IsSuccessStatusCode)
         {
-            // Decode upload param to get upload URL
-            var uploadUrl = System.Text.Encoding.UTF8.GetString(
-                Convert.FromBase64String(uploadParam));
-
-            fileStream.Position = 0;
-
-            using var httpClient = new HttpClient();
-            using var content = new StreamContent(fileStream);
-
-            // Set content headers
-            content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/octet-stream");
-
-            var response = await httpClient.PostAsync(uploadUrl, content);
-            return response.IsSuccessStatusCode;
+            string body = await response.Content.ReadAsStringAsync(ct);
+            throw new HttpRequestException($"CDN upload HTTP {(int)response.StatusCode}: {body}");
         }
-        catch
-        {
-            return false;
-        }
+
+        string downloadParam = response.Headers.TryGetValues("X-Encrypted-Param", out var vals)
+            ? vals.First()
+            : throw new InvalidOperationException("CDN upload: missing X-Encrypted-Param header");
+
+        return downloadParam;
     }
 
-    private async Task<string> CalculateMd5Async(Stream stream)
+    private static byte[] EncryptAesEcb(byte[] plaintext, byte[] key)
     {
-        using var md5 = MD5.Create();
-        var hash = await md5.ComputeHashAsync(stream);
-        return Convert.ToHexString(hash).ToLowerInvariant();
+        using var aes = Aes.Create();
+        aes.Key = key;
+        aes.Mode = CipherMode.ECB;
+        aes.Padding = PaddingMode.PKCS7;
+
+        using var encryptor = aes.CreateEncryptor();
+        using var ms = new MemoryStream();
+        using var cs = new CryptoStream(ms, encryptor, CryptoStreamMode.Write);
+        cs.Write(plaintext);
+        cs.FlushFinalBlock();
+        return ms.ToArray();
     }
 }
 
@@ -108,27 +128,22 @@ public class CdnUploader
 public class UploadedFile
 {
     /// <summary>
-    /// File key returned from upload
+    /// Download parameter (from CDN response header)
     /// </summary>
-    public string? FileKey { get; set; }
+    public string? DownloadParam { get; set; }
 
     /// <summary>
-    /// File size in bytes
+    /// AES key in hex format
+    /// </summary>
+    public string? AesKeyHex { get; set; }
+
+    /// <summary>
+    /// Original file size in bytes
     /// </summary>
     public int FileSize { get; set; }
 
     /// <summary>
-    /// File MD5 hash
+    /// Encrypted file size in bytes
     /// </summary>
-    public string? FileMd5 { get; set; }
-
-    /// <summary>
-    /// Original file name
-    /// </summary>
-    public string? FileName { get; set; }
-
-    /// <summary>
-    /// Media type
-    /// </summary>
-    public int MediaType { get; set; }
+    public int CipherSize { get; set; }
 }
