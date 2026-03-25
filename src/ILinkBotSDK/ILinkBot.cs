@@ -271,6 +271,12 @@ public class ILinkBot : IAsyncDisposable
         }
     }
 
+    /// <summary>
+    /// Send remote file message
+    /// </summary>
+    /// <param name="to">Recipient user ID</param>
+    /// <param name="url">Remote URL of the file</param>
+    /// <returns>Whether sending was successful</returns>
     public async Task<bool> SendRemoteFileAsync(string to, string url)
     {
         if (!_isConnected)
