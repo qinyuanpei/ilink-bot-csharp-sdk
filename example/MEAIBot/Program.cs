@@ -46,7 +46,7 @@ try
 {
     // Login
     Console.WriteLine("Logging in...");
-    await bot.LoginAsync(true);
+    await bot.LoginAsync();
 
     Console.WriteLine($"Logged in! BotId: {bot.BotId}, UserId: {bot.UserId}");
     Console.WriteLine();
