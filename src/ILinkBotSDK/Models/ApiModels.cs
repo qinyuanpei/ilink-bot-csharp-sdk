@@ -252,11 +252,6 @@ public class UploadedFile
     public int CipherSize { get; set; }
 
     /// <summary>
-    /// File MD5 hash
-    /// </summary>
-    public string? FileMd5 { get; set; }
-
-    /// <summary>
     /// File name
     /// </summary>
     public string? FileName { get; set; }
@@ -265,4 +260,6 @@ public class UploadedFile
     /// Media type
     /// </summary>
     public int MediaType { get; set; }
+
+    public string? FileMd5 { get; set; }
 }

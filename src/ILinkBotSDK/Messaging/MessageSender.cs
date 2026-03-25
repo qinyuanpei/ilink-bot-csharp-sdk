@@ -2,6 +2,7 @@ using Microsoft.Extensions.Logging;
 using ILinkBotSDK.Api;
 using ILinkBotSDK.Models;
 using ILinkBotSDK.Storage;
+using System.Text;
 
 namespace ILinkBotSDK.Messaging;
 
@@ -171,8 +172,8 @@ public class MessageSender
             var cdnMedia = new CdnMedia
             {
                 EncryptQueryParam = uploaded.DownloadParam,
-                AesKey = uploaded.AesKeyHex,
-                EncryptType = 2
+                AesKey = HexToBase64(uploaded.AesKeyHex!),
+                EncryptType = 1
             };
 
             var messageItem = uploaded.MediaType switch
@@ -180,7 +181,7 @@ public class MessageSender
                 UploadMediaType.Image => new MessageItem
                 {
                     Type = MessageItemType.Image,
-                    ImageItem = new ImageItem { Media = cdnMedia }
+                    ImageItem = new ImageItem { Media = cdnMedia, MidSize = uploaded.CipherSize}
                 },
                 UploadMediaType.Video => new MessageItem
                 {
@@ -199,6 +200,7 @@ public class MessageSender
                     {
                         Media = cdnMedia,
                         FileName = uploaded.FileName,
+                        Md5 = uploaded.FileMd5,
                         Len = uploaded.FileSize.ToString()
                     }
                 }
@@ -223,5 +225,13 @@ public class MessageSender
             _logger?.LogError(ex, "Failed to send file to {To}", to);
             return false;
         }
+    }
+
+    private string HexToBase64(string hex)
+    {
+        // Python: base64.b64encode(aes_key_hex.encode()).decode()
+        // So we encode the hex string as bytes, then base64 encode
+        byte[] bytes = Encoding.UTF8.GetBytes(hex);
+        return Convert.ToBase64String(bytes);
     }
 }
