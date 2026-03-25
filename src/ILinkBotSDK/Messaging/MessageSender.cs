@@ -168,6 +168,68 @@ public class MessageSender
 
         try
         {
+            var cdnMedia = new CdnMedia
+            {
+                EncryptQueryParam = uploaded.DownloadParam,
+                AesKey = uploaded.AesKeyHex,
+                EncryptType = 2
+            };
+
+            MessageItem messageItem;
+            switch (uploaded.MediaType)
+            {
+                case UploadMediaType.Image:
+                    messageItem = new MessageItem
+                    {
+                        Type = MessageItemType.Image,
+                        ImageItem = new ImageItem
+                        {
+                            Media = cdnMedia
+                        }
+                    };
+                    break;
+
+                case UploadMediaType.Video:
+                    messageItem = new MessageItem
+                    {
+                        Type = MessageItemType.Video,
+                        VideoItem = new VideoItem
+                        {
+                            Media = cdnMedia,
+                            VideoMd5 = uploaded.FileMd5,
+                            VideoSize = uploaded.FileSize
+                        }
+                    };
+                    break;
+
+                case UploadMediaType.Voice:
+                    messageItem = new MessageItem
+                    {
+                        Type = MessageItemType.Voice,
+                        VoiceItem = new VoiceItem
+                        {
+                            Media = cdnMedia,
+                            Text = uploaded.FileName
+                        }
+                    };
+                    break;
+
+                case UploadMediaType.File:
+                default:
+                    messageItem = new MessageItem
+                    {
+                        Type = MessageItemType.File,
+                        FileItem = new FileItem
+                        {
+                            FileName = uploaded.FileName,
+                            Media = cdnMedia,
+                            Md5 = uploaded.FileMd5,
+                            Len = uploaded.FileSize.ToString()
+                        }
+                    };
+                    break;
+            }
+
             var message = new WeixinMessage
             {
                 FromUserId = string.Empty,
@@ -176,25 +238,7 @@ public class MessageSender
                 MessageType = MessageType.Bot,
                 MessageState = MessageState.Finish,
                 ContextToken = contextToken,
-                ItemList = new List<MessageItem>
-                {
-                    new MessageItem
-                    {
-                        Type = MessageItemType.File,
-                        FileItem = new FileItem
-                        {
-                            FileName = uploaded.FileName,
-                            Media = new CdnMedia
-                            {
-                                EncryptQueryParam = uploaded.DownloadParam,
-                                AesKey = uploaded.AesKeyHex,
-                                EncryptType = 2
-                            },
-                            Md5 = uploaded.FileMd5,
-                            Len = uploaded.FileSize.ToString()
-                        }
-                    }
-                }
+                ItemList = new List<MessageItem> { messageItem }
             };
 
             var response = await _apiClient.SendMessageAsync(message);
