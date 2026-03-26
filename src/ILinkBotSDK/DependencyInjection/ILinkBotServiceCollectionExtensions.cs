@@ -32,28 +32,23 @@ public static class ILinkBotServiceCollectionExtensions
             return new SqliteStateStorage(dbPath, logger);
         });
 
+        // Register HttpClient with proper handler configuration
+        services.AddHttpClient("ILinkBot")
+            .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
+            {
+                PooledConnectionLifetime = TimeSpan.FromMinutes(2)
+            });
+
         // Register API client (singleton, reuses HttpClient)
         services.AddSingleton<IWeixinApiClient>(sp =>
         {
             var logger = sp.GetService<ILogger<WeixinApiClient>>();
-            var httpClient = sp.GetService<HttpClient>();
+            var httpClientFactory = sp.GetRequiredService<IHttpClientFactory>();
+            var httpClient = httpClientFactory.CreateClient("ILinkBot");
             var client = new WeixinApiClient(httpClient, logger);
             client.SetBaseUrl(options.BaseUrl);
             return client;
         });
-
-        // Register HttpClient if not already registered
-        if (services.All(s => s.ServiceType != typeof(HttpClient)))
-        {
-            services.AddSingleton(sp =>
-            {
-                var handler = new SocketsHttpHandler
-                {
-                    PooledConnectionLifetime = TimeSpan.FromMinutes(2)
-                };
-                return new HttpClient(handler);
-            });
-        }
 
         // Register login service
         services.AddSingleton<IQrCodeLoginService>(sp =>
