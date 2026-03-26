@@ -65,7 +65,7 @@ public class QrCodeLoginService
             Console.WriteLine("════════════════════════════════════════════════════════════");
             Console.WriteLine();
 
-            PrintQRCode(qrResponse.QrcodeImgContent);
+            PrintQRCode(qrResponse.QrcodeImgContent ?? string.Empty);
 
             Console.WriteLine("Please scan the QR code above with WeChat");
             Console.WriteLine("After scanning, please click \"Confirm Login\"");

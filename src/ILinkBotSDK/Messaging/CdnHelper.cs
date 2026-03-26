@@ -231,7 +231,7 @@ public class CdnHelper
             await File.WriteAllBytesAsync(filePath, data, ct);
             return true;
         }
-        catch (Exception ex)
+        catch
         {
             return false;
         }

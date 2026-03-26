@@ -23,7 +23,6 @@ public class ILinkBot : IAsyncDisposable
     private bool _isConnected;
     private string? _botId;
     private string? _userId;
-    private bool _disposed;
 
     /// <summary>
     /// Whether connected
@@ -349,8 +348,6 @@ public class ILinkBot : IAsyncDisposable
     public async ValueTask DisposeAsync()
     {
         await CloseAsync();
-
-        _disposed = true;
         GC.SuppressFinalize(this);
     }
 }
