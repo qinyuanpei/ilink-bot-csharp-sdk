@@ -74,8 +74,9 @@ try
                 }
                 else if (item.VoiceItem != null)
                 {
-                    text = item.VoiceItem.Text;
+                    text = $"已接收语音: {item.VoiceItem.Text}";
                 }
+
                 if (string.IsNullOrEmpty(text)) continue;
 
                 Console.WriteLine($"[Recv] from: {msg.FromUserId} {text}");
