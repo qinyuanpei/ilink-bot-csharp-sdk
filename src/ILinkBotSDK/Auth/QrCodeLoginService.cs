@@ -18,7 +18,7 @@ public class QrCodeLoginService : IQrCodeLoginService
     private string? _currentSessionKey;
     private DateTime _qrCodeStartTime;
     private const int QrPollTimeoutMs = 35000;    // 35 seconds poll timeout
-    private const int MaxQrRefreshCount = 10;      // Allow more refreshes
+    private const int MaxQrRefreshCount = 5;      // Allow more refreshes
 
     public QrCodeLoginService(
         IWeixinApiClient apiClient,
@@ -256,6 +256,10 @@ public class QrCodeLoginService : IQrCodeLoginService
                 }
 
                 await Task.Delay(1000);
+            }
+            catch(TaskCanceledException)
+            {
+                continue;
             }
             catch (Exception ex)
             {

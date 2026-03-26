@@ -7,14 +7,31 @@ Console.WriteLine();
 var bot = new ILinkBot(new ILinkBotOptions
 {
     BaseUrl = "https://ilinkai.weixin.qq.com",
-    StateDirectory = "./.ilink"
+    StateDirectory = "./.ilink",
+    EnableConsoleOutput = true
 });
+
+bot.OnLoginStateChanged += (state, qrcode, hint) =>
+{
+    switch (state)
+    {
+        case LoginStatus.Waiting:
+            Console.WriteLine(qrcode);
+            Console.WriteLine($"[{state.ToString()}] {hint}");
+            break;
+        case LoginStatus.Scanned:
+        case LoginStatus.Confirmed:
+        case LoginStatus.Expired:
+            Console.WriteLine($"[{state.ToString()}] {hint}");
+            break;
+    }
+};
 
 try
 {
     // Login (will auto-reuse saved credentials)
     Console.WriteLine("Logging in...");
-    await bot.LoginAsync(true);
+    await bot.LoginAsync();
 
     Console.WriteLine($"登录成功! BotID: {bot.BotId}, UserID: {bot.UserId}");
     Console.WriteLine();
