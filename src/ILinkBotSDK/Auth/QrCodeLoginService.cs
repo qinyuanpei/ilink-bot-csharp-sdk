@@ -257,7 +257,7 @@ public class QrCodeLoginService : IQrCodeLoginService
 
                 await Task.Delay(1000);
             }
-            catch(TaskCanceledException)
+            catch (TaskCanceledException)
             {
                 continue;
             }
