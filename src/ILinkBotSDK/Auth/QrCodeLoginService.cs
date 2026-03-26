@@ -12,7 +12,7 @@ public class QrCodeLoginService : IQrCodeLoginService
     private readonly IWeixinApiClient _apiClient;
     private readonly ILogger<QrCodeLoginService>? _logger;
     private readonly bool _enableConsoleOutput;
-    private readonly Action<LoginStatus, string?, string?>? _onStateChanged;
+    private Action<LoginStatus, string?, string?>? _onStateChanged;
     private string? _currentQrCode;
     private string? _currentQrCodeId;
     private string? _currentSessionKey;
@@ -30,6 +30,14 @@ public class QrCodeLoginService : IQrCodeLoginService
         _logger = logger;
         _enableConsoleOutput = enableConsoleOutput;
         _onStateChanged = onStateChanged;
+    }
+
+    /// <summary>
+    /// Set state changed callback
+    /// </summary>
+    public void SetStateChangedCallback(Action<LoginStatus, string?, string?>? callback)
+    {
+        _onStateChanged = callback;
     }
 
     /// <summary>

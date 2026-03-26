@@ -48,7 +48,16 @@ public class ILinkBot : IAsyncDisposable
     /// <summary>
     /// Called when login state changes
     /// </summary>
-    public Action<LoginStatus, string?, string?>? OnLoginStateChanged;
+    public Action<LoginStatus, string?, string?>? OnLoginStateChanged
+    {
+        get => _onLoginStateChanged;
+        set
+        {
+            _onLoginStateChanged = value;
+            _loginService.SetStateChangedCallback(value);
+        }
+    }
+    private Action<LoginStatus, string?, string?>? _onLoginStateChanged;
 
     /// <summary>
     /// Create ILinkBot instance
@@ -73,7 +82,7 @@ public class ILinkBot : IAsyncDisposable
         _apiClient.SetBaseUrl(baseUrl);
 
         // Initialize services
-        _loginService = new QrCodeLoginService(_apiClient, enableConsoleOutput: _enableConsoleOutput, onStateChanged: options?.OnLoginStateChanged);
+        _loginService = new QrCodeLoginService(_apiClient, enableConsoleOutput: _enableConsoleOutput);
         _messageReceiver = new MessageReceiver(_apiClient, _stateStorage);
         _messageSender = new MessageSender(_apiClient, _stateStorage);
         _cdnHelper = new CdnHelper(_apiClient);

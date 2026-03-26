@@ -1,4 +1,4 @@
-using ILinkBotSDK.Auth;
+using ILinkBotSDK;
 
 namespace ILinkBotSDK.Auth;
 
@@ -7,6 +7,11 @@ namespace ILinkBotSDK.Auth;
 /// </summary>
 public interface IQrCodeLoginService
 {
+    /// <summary>
+    /// Set state changed callback
+    /// </summary>
+    void SetStateChangedCallback(Action<LoginStatus, string?, string?>? callback);
+
     /// <summary>
     /// Start QR code login
     /// </summary>
