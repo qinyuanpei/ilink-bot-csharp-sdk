@@ -45,4 +45,9 @@ public class ILinkBotOptions
     /// Enable console output (QR code display, status messages)
     /// </summary>
     public bool EnableConsoleOutput { get; set; } = true;
+
+    /// <summary>
+    /// Called when login state changes
+    /// </summary>
+    public Action<LoginStatus, string?, string?>? OnLoginStateChanged { get; set; }
 }

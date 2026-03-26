@@ -73,7 +73,7 @@ public class ILinkBot : IAsyncDisposable
         _apiClient.SetBaseUrl(baseUrl);
 
         // Initialize services
-        _loginService = new QrCodeLoginService(_apiClient, enableConsoleOutput: _enableConsoleOutput, onStateChanged: OnLoginStateChanged);
+        _loginService = new QrCodeLoginService(_apiClient, enableConsoleOutput: _enableConsoleOutput, onStateChanged: options?.OnLoginStateChanged);
         _messageReceiver = new MessageReceiver(_apiClient, _stateStorage);
         _messageSender = new MessageSender(_apiClient, _stateStorage);
         _cdnHelper = new CdnHelper(_apiClient);
