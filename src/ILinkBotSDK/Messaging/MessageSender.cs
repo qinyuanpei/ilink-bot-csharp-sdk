@@ -181,7 +181,7 @@ public class MessageSender
                 UploadMediaType.Image => new MessageItem
                 {
                     Type = MessageItemType.Image,
-                    ImageItem = new ImageItem { Media = cdnMedia, MidSize = uploaded.CipherSize}
+                    ImageItem = new ImageItem { Media = cdnMedia, MidSize = uploaded.CipherSize }
                 },
                 UploadMediaType.Video => new MessageItem
                 {
