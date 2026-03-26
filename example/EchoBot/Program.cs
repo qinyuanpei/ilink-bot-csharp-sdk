@@ -33,7 +33,7 @@ try
     Console.WriteLine("Logging in...");
     await bot.LoginAsync();
 
-    Console.WriteLine($"登录成功! BotID: {bot.BotId}, UserID: {bot.UserId}");
+    Console.WriteLine($"登录成功! 欢迎你, BotID: {bot.BotId}, UserID: {bot.UserId}");
     Console.WriteLine();
 
     // 接收消息循环
@@ -70,7 +70,7 @@ try
                     var fileItem = item.FileItem;
                     var filePath = Path.Combine(AppContext.BaseDirectory, fileItem.FileName!);
                     await bot.File.DownloadAsync(fileItem.Media!, filePath);
-                    text = $"已接收文件{fileItem.FileName}";
+                    text = $"已接收文件: {fileItem.FileName}";
                 }
                 else if (item.VoiceItem != null)
                 {
@@ -78,20 +78,34 @@ try
                 }
                 if (string.IsNullOrEmpty(text)) continue;
 
-                Console.WriteLine($"收到消息 from: {msg.FromUserId}");
-                Console.WriteLine($"内容: {text}");
+                Console.WriteLine($"[Recv] from: {msg.FromUserId} {text}");
                 Console.WriteLine();
 
-                // 自动回复
+                // 对方正在输入...开始
+                await bot.SendTypingAsync(msg.FromUserId!);
+
+                // 回复文本消息
                 var reply = $"[Bot] {text}";
-                Console.WriteLine($"发送回复: {reply}");
-
                 await bot.SendTextAsync(msg.FromUserId!, reply);
+
+                Console.WriteLine($"[Send] from: {bot.BotId} {reply}");
                 Console.WriteLine();
 
-                await bot.SendFileAsync(msg.FromUserId!, "D:\\Documents\\MCP-Training\\MCP_For_.NET_Developers.pptx");
-                await bot.SendFileAsync(msg.FromUserId!, "D:\\Documents\\MCP-Training\\MCP_vs_Function_Calling.jpg");
+                // 回复文件、图片、URL
+                await bot.SendFileAsync(msg.FromUserId!, Path.Combine(AppContext.BaseDirectory, "Assets/MCP_vs_Function_Calling.jpg"));
+                Console.WriteLine($"[Send] from: {bot.BotId} 已发送文件 MCP_vs_Function_Calling.jpg");
+                Console.WriteLine();
+
+                await bot.SendFileAsync(msg.FromUserId!, Path.Combine(AppContext.BaseDirectory, "Assets/蜀道难.txt"));
+                Console.WriteLine($"[Send] from: {bot.BotId} 已发送文件 蜀道难.txt");
+                Console.WriteLine();
+
                 await bot.SendRemoteFileAsync(msg.FromUserId!, "https://raw.githubusercontent.com/HKUDS/nanobot/b5302b6f3da12e39caad98e9a82fce47880d5c77/nanobot/channels/weixin.py");
+                Console.WriteLine($"[Send] from: {bot.BotId} 已发送文件 weixin.py");
+                Console.WriteLine();
+
+                // 对方正在输入...结束
+                await bot.StopTypingAsync(msg.FromUserId!);
             }
         }
         catch (OperationCanceledException)
