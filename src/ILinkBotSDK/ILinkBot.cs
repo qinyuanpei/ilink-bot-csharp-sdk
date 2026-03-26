@@ -259,7 +259,7 @@ public class ILinkBot : IAsyncDisposable
         try
         {
             // Upload to CDN
-            var uploaded = await _cdnHelper.UploadAsync(to, filePath);
+            var uploaded = await _cdnHelper.UploadFileAsync(to, filePath);
 
             // Send message with file
             return await _messageSender.SendFileAsync(to, uploaded);

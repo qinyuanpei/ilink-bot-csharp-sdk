@@ -99,13 +99,13 @@ try
                     conversationHistory[userId].Add(new MEAIChatMessage(MEAIChatRole.Assistant, reply));
 
                     // Send reply
-                    var success = await bot.SendAsync(userId, reply);
+                    var success = await bot.SendTextAsync(userId, reply);
                     Console.WriteLine($"Send result: {(success ? "Success" : "Failed")}");
                 }
                 catch (Exception ex)
                 {
                     Console.WriteLine($"AI Error: {ex.Message}");
-                    await bot.SendAsync(userId, "Sorry, I'm having trouble responding right now.");
+                    await bot.SendTextAsync(userId, "Sorry, I'm having trouble responding right now.");
                 }
 
                 Console.WriteLine();

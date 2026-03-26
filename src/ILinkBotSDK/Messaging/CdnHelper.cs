@@ -39,15 +39,10 @@ public class CdnHelper
     /// <param name="filePath">Local file path</param>
     /// <param name="ct">Cancellation token</param>
     /// <returns>Uploaded file info with download parameters</returns>
-    public async Task<UploadedFile> UploadFileAsync(
-        string toUserId,
-        string filePath,
-        CancellationToken ct = default)
+    public async Task<UploadedFile> UploadFileAsync(string toUserId, string filePath, CancellationToken ct = default)
     {
         if (!File.Exists(filePath))
-        {
-            throw new FileNotFoundException("File not found", filePath);
-        }
+            throw new FileNotFoundException("The specific file not found", filePath);
 
         // Read file bytes
         var data = await File.ReadAllBytesAsync(filePath, ct);
@@ -84,8 +79,7 @@ public class CdnHelper
 
         var uploadResp = await _apiClient.GetUploadUrlAsync(uploadReq);
         if (uploadResp.Ret != 0)
-            throw new InvalidOperationException(
-                $"GetUploadUrl failed: ret={uploadResp.Ret} errmsg={uploadResp.ErrMsg}");
+            throw new InvalidOperationException($"GetUploadUrl failed: ret={uploadResp.Ret} errmsg={uploadResp.ErrMsg}");
 
         string downloadParam = await UploadToCdnAsync(encrypted, uploadResp.UploadParam!, fileKeyHex, ct);
 
@@ -108,31 +102,22 @@ public class CdnHelper
     /// <param name="url">Source URL to download from</param>
     /// <param name="ct">Cancellation token</param>
     /// <returns>Uploaded file info with download parameters</returns>
-    public async Task<UploadedFile> UploadFromUrlAsync(
-        string toUserId,
-        string url,
-        CancellationToken ct = default)
+    public async Task<UploadedFile> UploadFromUrlAsync(string toUserId, string url, CancellationToken ct = default)
     {
-        // Download file to temp location
-        var tempPath = await DownloadToTempAsync(url, ct);
+        var tempFile = await DownloadAsTempFileAsync(url, ct);
 
         try
         {
-            // Upload the downloaded file
-            var uploaded = await UploadFileAsync(toUserId, tempPath, ct);
+            var uploaded = await UploadFileAsync(toUserId, tempFile, ct);
             return uploaded;
         }
         finally
         {
-            // Clean up temp file
-            if (File.Exists(tempPath))
-            {
-                File.Delete(tempPath);
-            }
+            if (File.Exists(tempFile)) File.Delete(tempFile);
         }
     }
 
-    private async Task<string> DownloadToTempAsync(string url, CancellationToken ct)
+    private async Task<string> DownloadAsTempFileAsync(string url, CancellationToken ct)
     {
         using var httpClient = new HttpClient { Timeout = TimeSpan.FromMinutes(5) };
 
@@ -155,7 +140,7 @@ public class CdnHelper
         return tempPath;
     }
 
-    private static string GetFileNameFromHeaders(HttpHeaders headers, Uri? requestUri)
+    private string GetFileNameFromHeaders(HttpHeaders headers, Uri? requestUri)
     {
         // Try Content-Disposition header
         if (headers.TryGetValues("Content-Disposition", out var cdValues))
@@ -219,8 +204,7 @@ public class CdnHelper
         try
         {
             // Build CDN download URL
-            var url = $"{CdnBaseUrl}/download" +
-                      $"?encrypted_query_param={Uri.EscapeDataString(encryptQueryParam)}";
+            var url = $"{CdnBaseUrl}/download?encrypted_query_param={Uri.EscapeDataString(encryptQueryParam)}";
 
             using var httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(60) };
             var response = await httpClient.GetAsync(url, ct);
@@ -273,9 +257,7 @@ public class CdnHelper
     private static async Task<string> UploadToCdnAsync(
         byte[] encrypted, string uploadParam, string fileKey, CancellationToken ct)
     {
-        string url = $"{CdnBaseUrl}/upload" +
-                     $"?encrypted_query_param={Uri.EscapeDataString(uploadParam)}" +
-                     $"&filekey={Uri.EscapeDataString(fileKey)}";
+        string url = $"{CdnBaseUrl}/upload?encrypted_query_param={Uri.EscapeDataString(uploadParam)}&filekey={Uri.EscapeDataString(fileKey)}";
 
         using var httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(60) };
         using var content = new ByteArrayContent(encrypted);

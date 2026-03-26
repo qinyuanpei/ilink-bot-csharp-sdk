@@ -69,7 +69,7 @@ try
                 var reply = $"[Bot] {text}";
                 Console.WriteLine($"发送回复: {reply}");
 
-                var success = await bot.SendAsync(msg.FromUserId!, reply);
+                var success = await bot.SendTextAsync(msg.FromUserId!, reply);
                 Console.WriteLine($"发送结果: {(success ? "成功" : "失败")}");
                 Console.WriteLine();
 
