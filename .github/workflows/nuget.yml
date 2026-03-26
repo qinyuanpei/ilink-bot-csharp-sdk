@@ -1,4 +1,4 @@
-name: Publish to NuGet
+name: Build, Test & Publish
 
 on:
   push:
@@ -11,8 +11,43 @@ on:
       - main
 
 jobs:
+  codeql:
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: csharp
+
+      - name: Build
+        run: dotnet build src/ILinkBotSDK/ILinkBotSDK.csproj
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Check formatting
+        run: dotnet format --verify-no-changes --verbosity diagnostic
+
   build:
     runs-on: ubuntu-latest
+    needs: [codeql, format]
     permissions:
       contents: write
 
@@ -30,6 +65,9 @@ jobs:
 
       - name: Build
         run: dotnet build src/ILinkBotSDK/ILinkBotSDK.csproj --configuration Release --no-restore
+
+      - name: Test
+        run: dotnet test --configuration Release --no-build --verbosity normal
 
       - name: Pack
         run: |
