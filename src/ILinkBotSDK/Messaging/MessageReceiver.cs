@@ -8,15 +8,15 @@ namespace ILinkBotSDK.Messaging;
 /// <summary>
 /// Message receiver (long polling)
 /// </summary>
-public class MessageReceiver
+public class MessageReceiver : IMessageReceiver
 {
-    private readonly WeixinApiClient _apiClient;
+    private readonly IWeixinApiClient _apiClient;
     private readonly IStateStorage _stateStorage;
     private readonly ILogger<MessageReceiver>? _logger;
     private string? _currentCursor;
 
     public MessageReceiver(
-        WeixinApiClient apiClient,
+        IWeixinApiClient apiClient,
         IStateStorage stateStorage,
         ILogger<MessageReceiver>? logger = null)
     {

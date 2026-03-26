@@ -17,17 +17,17 @@ namespace ILinkBotSDK.Messaging;
 ///   <item>Download files from WeChat CDN</item>
 /// </list>
 /// </remarks>
-public class CdnHelper
+public class CdnHelper : ICdnHelper
 {
     private const string CdnBaseUrl = "https://novac2c.cdn.weixin.qq.com/c2c";
 
-    private readonly WeixinApiClient _apiClient;
+    private readonly IWeixinApiClient _apiClient;
 
     /// <summary>
     /// Creates a new CDN helper
     /// </summary>
     /// <param name="apiClient">WeChat API client</param>
-    public CdnHelper(WeixinApiClient apiClient)
+    public CdnHelper(IWeixinApiClient apiClient)
     {
         _apiClient = apiClient;
     }
@@ -175,15 +175,14 @@ public class CdnHelper
     /// <param name="media">CDN media info from received message</param>
     /// <param name="filePath">Local path to save the file</param>
     /// <param name="ct">Cancellation token</param>
-    /// <returns>Whether download was successful</returns>
-    public async Task<bool> DownloadAsync(CdnMedia media, string filePath, CancellationToken ct = default)
+    public async Task DownloadAsync(CdnMedia media, string filePath, CancellationToken ct = default)
     {
         if (media == null || string.IsNullOrEmpty(media.EncryptQueryParam))
         {
-            return false;
+            throw new ApiException(-1, "Invalid CDN media info");
         }
 
-        return await DownloadFileAsync(media.EncryptQueryParam, media.AesKey, filePath, ct);
+        await DownloadFileAsync(media.EncryptQueryParam, media.AesKey, filePath, ct);
     }
 
     /// <summary>
@@ -193,48 +192,39 @@ public class CdnHelper
     /// <param name="aesKey">AES key (base64 encoded or hex string)</param>
     /// <param name="filePath">Local path to save the file</param>
     /// <param name="ct">Cancellation token</param>
-    /// <returns>Whether download was successful</returns>
-    private async Task<bool> DownloadFileAsync(string encryptQueryParam, string? aesKey, string filePath, CancellationToken ct = default)
+    private async Task DownloadFileAsync(string encryptQueryParam, string? aesKey, string filePath, CancellationToken ct = default)
     {
         if (string.IsNullOrEmpty(encryptQueryParam))
         {
-            return false;
+            throw new ApiException(-1, "Invalid encrypt query parameter");
         }
 
-        try
+        // Build CDN download URL
+        var url = $"{CdnBaseUrl}/download?encrypted_query_param={Uri.EscapeDataString(encryptQueryParam)}";
+
+        using var httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(60) };
+        var response = await httpClient.GetAsync(url, ct);
+        if (!response.IsSuccessStatusCode)
         {
-            // Build CDN download URL
-            var url = $"{CdnBaseUrl}/download?encrypted_query_param={Uri.EscapeDataString(encryptQueryParam)}";
-
-            using var httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(60) };
-            var response = await httpClient.GetAsync(url, ct);
-            if (!response.IsSuccessStatusCode)
-            {
-                return false;
-            }
-
-            var data = await response.Content.ReadAsByteArrayAsync(ct);
-
-            // Decrypt if AES key is provided
-            if (!string.IsNullOrEmpty(aesKey))
-            {
-                data = DecryptAesEcb(data, aesKey);
-            }
-
-            // Ensure directory exists
-            var directory = Path.GetDirectoryName(filePath);
-            if (!string.IsNullOrEmpty(directory))
-            {
-                Directory.CreateDirectory(directory);
-            }
-
-            await File.WriteAllBytesAsync(filePath, data, ct);
-            return true;
+            throw new ApiException((int)response.StatusCode, $"Failed to download from CDN: {response.StatusCode}");
         }
-        catch
+
+        var data = await response.Content.ReadAsByteArrayAsync(ct);
+
+        // Decrypt if AES key is provided
+        if (!string.IsNullOrEmpty(aesKey))
         {
-            return false;
+            data = DecryptAesEcb(data, aesKey);
         }
+
+        // Ensure directory exists
+        var directory = Path.GetDirectoryName(filePath);
+        if (!string.IsNullOrEmpty(directory))
+        {
+            Directory.CreateDirectory(directory);
+        }
+
+        await File.WriteAllBytesAsync(filePath, data, ct);
     }
 
     private static int GetMediaType(string extension)

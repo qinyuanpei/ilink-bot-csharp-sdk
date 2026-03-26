@@ -7,10 +7,12 @@ namespace ILinkBotSDK.Auth;
 /// <summary>
 /// QR code login service
 /// </summary>
-public class QrCodeLoginService
+public class QrCodeLoginService : IQrCodeLoginService
 {
-    private readonly WeixinApiClient _apiClient;
+    private readonly IWeixinApiClient _apiClient;
     private readonly ILogger<QrCodeLoginService>? _logger;
+    private readonly bool _enableConsoleOutput;
+    private readonly Action<LoginStatus, string?, string?>? _onStateChanged;
     private string? _currentQrCode;
     private string? _currentQrCodeId;
     private string? _currentSessionKey;
@@ -18,10 +20,16 @@ public class QrCodeLoginService
     private const int QrPollTimeoutMs = 35000;    // 35 seconds poll timeout
     private const int MaxQrRefreshCount = 10;      // Allow more refreshes
 
-    public QrCodeLoginService(WeixinApiClient apiClient, ILogger<QrCodeLoginService>? logger = null)
+    public QrCodeLoginService(
+        IWeixinApiClient apiClient,
+        ILogger<QrCodeLoginService>? logger = null,
+        bool enableConsoleOutput = true,
+        Action<LoginStatus, string?, string?>? onStateChanged = null)
     {
         _apiClient = apiClient;
         _logger = logger;
+        _enableConsoleOutput = enableConsoleOutput;
+        _onStateChanged = onStateChanged;
     }
 
     /// <summary>
@@ -33,9 +41,12 @@ public class QrCodeLoginService
         if (!force && !string.IsNullOrEmpty(_currentQrCode))
         {
             // Display existing QR code
-            PrintQRCode(_currentQrCode);
-            Console.WriteLine("QR code is ready, please scan with WeChat");
-            Console.WriteLine();
+            if (_enableConsoleOutput)
+            {
+                PrintQRCode(_currentQrCode);
+                Console.WriteLine("QR code is ready, please scan with WeChat");
+                Console.WriteLine();
+            }
 
             return new QrCodeStartResult
             {
@@ -58,21 +69,26 @@ public class QrCodeLoginService
             _logger?.LogInformation("QR code retrieved, session key: {SessionKey}", _currentSessionKey);
 
             // Display QR code in console
-            Console.Clear();
-            Console.WriteLine();
-            Console.WriteLine("════════════════════════════════════════════════════════════");
-            Console.WriteLine("                    WeChat iLink Login                      ");
-            Console.WriteLine("════════════════════════════════════════════════════════════");
-            Console.WriteLine();
+            if (_enableConsoleOutput)
+            {
+                Console.Clear();
+                Console.WriteLine();
+                Console.WriteLine("════════════════════════════════════════════════════════════");
+                Console.WriteLine("                    WeChat iLink Login                      ");
+                Console.WriteLine("════════════════════════════════════════════════════════════");
+                Console.WriteLine();
 
-            PrintQRCode(qrResponse.QrcodeImgContent ?? string.Empty);
+                PrintQRCode(qrResponse.QrcodeImgContent ?? string.Empty);
 
-            Console.WriteLine("Please scan the QR code above with WeChat");
-            Console.WriteLine("After scanning, please click \"Confirm Login\"");
-            Console.WriteLine();
-            Console.WriteLine("Tip: If the QR code image cannot be displayed, please copy the link below and open in browser:");
-            Console.WriteLine($"  {qrResponse.QrcodeImgContent}");
-            Console.WriteLine();
+                Console.WriteLine("Please scan the QR code above with WeChat");
+                Console.WriteLine("After scanning, please click \"Confirm Login\"");
+                Console.WriteLine();
+                Console.WriteLine("Tip: If the QR code image cannot be displayed, please copy the link below and open in browser:");
+                Console.WriteLine($"  {qrResponse.QrcodeImgContent}");
+                Console.WriteLine();
+            }
+
+            _onStateChanged?.Invoke(LoginStatus.Waiting, qrResponse.QrcodeImgContent, "Please scan the QR code with WeChat");
 
             return new QrCodeStartResult
             {
@@ -110,8 +126,8 @@ public class QrCodeLoginService
         bool scannedPrinted = false;
         int pollCount = 0;
 
-        Console.WriteLine("Waiting for scan... (Press Ctrl+C to cancel)");
-        Console.WriteLine();
+        ConsoleWriteLine("Waiting for scan... (Press Ctrl+C to cancel)");
+        ConsoleWriteLine();
 
         while (DateTime.UtcNow < deadline)
         {
@@ -137,21 +153,22 @@ public class QrCodeLoginService
                         // Print waiting indicator every 10 seconds
                         if (pollCount % 10 == 0)
                         {
-                            Console.Write(".");
+                            ConsoleWrite(".");
                         }
                         break;
 
                     case QrCodeStatus.Scaned:
                         if (!scannedPrinted)
                         {
-                            Console.WriteLine();
-                            Console.WriteLine();
-                            Console.WriteLine("═══════════════════════════════════════════════════");
-                            Console.WriteLine("              ✅ Scanned, please confirm!          ");
-                            Console.WriteLine("═══════════════════════════════════════════════════");
-                            Console.WriteLine();
+                            ConsoleWriteLine();
+                            ConsoleWriteLine();
+                            ConsoleWriteLine("═══════════════════════════════════════════════════");
+                            ConsoleWriteLine("              ✅ Scanned, please confirm!          ");
+                            ConsoleWriteLine("═══════════════════════════════════════════════════");
+                            ConsoleWriteLine();
                             scannedPrinted = true;
                         }
+                        _onStateChanged?.Invoke(LoginStatus.Scanned, null, "QR code scanned, please confirm");
                         break;
 
                     case QrCodeStatus.Confirmed:
@@ -169,14 +186,16 @@ public class QrCodeLoginService
                             statusResponse.IlinkBotId,
                             statusResponse.IlinkUserId);
 
-                        Console.WriteLine();
-                        Console.WriteLine("═══════════════════════════════════════════════════");
-                        Console.WriteLine("              ✅ Login successful!                 ");
-                        Console.WriteLine("═══════════════════════════════════════════════════");
-                        Console.WriteLine();
+                        ConsoleWriteLine();
+                        ConsoleWriteLine("═══════════════════════════════════════════════════");
+                        ConsoleWriteLine("              ✅ Login successful!                 ");
+                        ConsoleWriteLine("═══════════════════════════════════════════════════");
+                        ConsoleWriteLine();
 
                         // Clear current session
                         ClearSession();
+
+                        _onStateChanged?.Invoke(LoginStatus.Confirmed, null, "Login successful");
 
                         return new LoginResult
                         {
@@ -194,6 +213,7 @@ public class QrCodeLoginService
                         {
                             _logger?.LogWarning("QR code expired {MaxRefreshCount} times, giving up", MaxQrRefreshCount);
                             ClearSession();
+                            _onStateChanged?.Invoke(LoginStatus.Expired, null, "Login timeout: QR code expired multiple times");
                             return new LoginResult
                             {
                                 Success = false,
@@ -205,9 +225,11 @@ public class QrCodeLoginService
                         _logger?.LogInformation("QR code expired, refreshing ({RefreshCount}/{MaxRefreshCount})",
                             refreshCount, MaxQrRefreshCount);
 
-                        Console.WriteLine();
-                        Console.WriteLine($"⚠️  QR code expired, refreshing ({refreshCount}/{MaxQrRefreshCount})...");
-                        Console.WriteLine();
+                        ConsoleWriteLine();
+                        ConsoleWriteLine($"⚠️  QR code expired, refreshing ({refreshCount}/{MaxQrRefreshCount})...");
+                        ConsoleWriteLine();
+
+                        _onStateChanged?.Invoke(LoginStatus.Expired, null, $"QR code expired, refreshing ({refreshCount}/{MaxQrRefreshCount})...");
 
                         var refreshResult = await StartLoginAsync(sessionKey, force: true);
                         if (string.IsNullOrEmpty(refreshResult.QrCodeUrl))
@@ -250,6 +272,8 @@ public class QrCodeLoginService
 
     private void PrintQRCode(string content)
     {
+        if (!_enableConsoleOutput) return;
+
         try
         {
             using var generator = new QRCodeGenerator();
@@ -270,5 +294,38 @@ public class QrCodeLoginService
         _currentQrCode = null;
         _currentQrCodeId = null;
         _currentSessionKey = null;
+    }
+
+    private void RaiseStateChanged(LoginStatus status, string? qrCodeUrl = null, string? message = null)
+    {
+        if (_enableConsoleOutput)
+        {
+            ConsoleWriteLine(message ?? "");
+        }
+        _onStateChanged?.Invoke(status, qrCodeUrl, message);
+    }
+
+    private void ConsoleWriteLine(string? message = null)
+    {
+        if (_enableConsoleOutput)
+        {
+            Console.WriteLine(message);
+        }
+    }
+
+    private void ConsoleWrite(string message)
+    {
+        if (_enableConsoleOutput)
+        {
+            Console.Write(message);
+        }
+    }
+
+    private void ConsoleClear()
+    {
+        if (_enableConsoleOutput)
+        {
+            Console.Clear();
+        }
     }
 }

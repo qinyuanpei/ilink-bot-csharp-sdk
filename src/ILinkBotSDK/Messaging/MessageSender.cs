@@ -9,15 +9,15 @@ namespace ILinkBotSDK.Messaging;
 /// <summary>
 /// Message sender
 /// </summary>
-public class MessageSender
+public class MessageSender : IMessageSender
 {
-    private readonly WeixinApiClient _apiClient;
+    private readonly IWeixinApiClient _apiClient;
     private readonly IStateStorage _stateStorage;
     private readonly ILogger<MessageSender>? _logger;
     private readonly Dictionary<string, string> _typingTickets = new();
 
     public MessageSender(
-        WeixinApiClient apiClient,
+        IWeixinApiClient apiClient,
         IStateStorage stateStorage,
         ILogger<MessageSender>? logger = null)
     {
@@ -32,8 +32,7 @@ public class MessageSender
     /// <param name="to">Recipient user ID</param>
     /// <param name="text">Text content</param>
     /// <param name="contextToken">Context token (obtained from received message)</param>
-    /// <returns>Whether sending was successful</returns>
-    public async Task<bool> SendTextAsync(string to, string text, string? contextToken = null)
+    public async Task SendTextAsync(string to, string text, string? contextToken = null)
     {
         // If no contextToken provided, try to get from storage
         if (string.IsNullOrEmpty(contextToken))
@@ -43,37 +42,31 @@ public class MessageSender
 
         if (string.IsNullOrEmpty(contextToken))
         {
-            _logger?.LogError("No context token available for user {To}", to);
-            return false;
+            throw new ApiException(-1, $"No context token available for user {to}");
         }
 
-        try
+        var message = new WeixinMessage
         {
-            var message = new WeixinMessage
+            FromUserId = string.Empty,
+            ToUserId = to,
+            ClientId = Guid.NewGuid().ToString(),
+            MessageType = MessageType.Bot,
+            MessageState = MessageState.Finish,
+            ContextToken = contextToken,
+            ItemList = new List<MessageItem>
             {
-                FromUserId = string.Empty,
-                ToUserId = to,
-                ClientId = Guid.NewGuid().ToString(),
-                MessageType = MessageType.Bot,
-                MessageState = MessageState.Finish,
-                ContextToken = contextToken,
-                ItemList = new List<MessageItem>
+                new MessageItem
                 {
-                    new MessageItem
-                    {
-                        Type = MessageItemType.Text,
-                        TextItem = new TextItem { Text = text }
-                    }
+                    Type = MessageItemType.Text,
+                    TextItem = new TextItem { Text = text }
                 }
-            };
+            }
+        };
 
-            var response = await _apiClient.SendMessageAsync(message);
-            return response.IsSuccess;
-        }
-        catch (Exception ex)
+        var response = await _apiClient.SendMessageAsync(message);
+        if (!response.IsSuccess)
         {
-            _logger?.LogError(ex, "Failed to send message to {To}", to);
-            return false;
+            throw new ApiException(response.Ret, response.ErrMsg ?? "Failed to send message");
         }
     }
 
@@ -158,72 +151,66 @@ public class MessageSender
     /// <summary>
     /// Send file message
     /// </summary>
-    public async Task<bool> SendFileAsync(string to, UploadedFile uploaded)
+    public async Task SendFileAsync(string to, UploadedFile uploaded)
     {
         var contextToken = await _stateStorage.GetContextTokenAsync(to);
         if (string.IsNullOrEmpty(contextToken))
         {
-            _logger?.LogError("No context token available for user {To}", to);
-            return false;
+            throw new ApiException(-1, $"No context token available for user {to}");
         }
 
-        try
+        var cdnMedia = new CdnMedia
         {
-            var cdnMedia = new CdnMedia
-            {
-                EncryptQueryParam = uploaded.DownloadParam,
-                AesKey = HexToBase64(uploaded.AesKeyHex!),
-                EncryptType = 1
-            };
+            EncryptQueryParam = uploaded.DownloadParam,
+            AesKey = HexToBase64(uploaded.AesKeyHex!),
+            EncryptType = 1
+        };
 
-            var messageItem = uploaded.MediaType switch
+        var messageItem = uploaded.MediaType switch
+        {
+            UploadMediaType.Image => new MessageItem
             {
-                UploadMediaType.Image => new MessageItem
+                Type = MessageItemType.Image,
+                ImageItem = new ImageItem { Media = cdnMedia, MidSize = uploaded.CipherSize }
+            },
+            UploadMediaType.Video => new MessageItem
+            {
+                Type = MessageItemType.Video,
+                VideoItem = new VideoItem { Media = cdnMedia, VideoSize = uploaded.CipherSize }
+            },
+            UploadMediaType.Voice => new MessageItem
+            {
+                Type = MessageItemType.Voice,
+                VoiceItem = new VoiceItem { Media = cdnMedia }
+            },
+            _ => new MessageItem
+            {
+                Type = MessageItemType.File,
+                FileItem = new FileItem
                 {
-                    Type = MessageItemType.Image,
-                    ImageItem = new ImageItem { Media = cdnMedia, MidSize = uploaded.CipherSize }
-                },
-                UploadMediaType.Video => new MessageItem
-                {
-                    Type = MessageItemType.Video,
-                    VideoItem = new VideoItem { Media = cdnMedia, VideoSize = uploaded.CipherSize }
-                },
-                UploadMediaType.Voice => new MessageItem
-                {
-                    Type = MessageItemType.Voice,
-                    VoiceItem = new VoiceItem { Media = cdnMedia }
-                },
-                _ => new MessageItem
-                {
-                    Type = MessageItemType.File,
-                    FileItem = new FileItem
-                    {
-                        Media = cdnMedia,
-                        FileName = uploaded.FileName,
-                        Md5 = uploaded.FileMd5,
-                        Len = uploaded.FileSize.ToString()
-                    }
+                    Media = cdnMedia,
+                    FileName = uploaded.FileName,
+                    Md5 = uploaded.FileMd5,
+                    Len = uploaded.FileSize.ToString()
                 }
-            };
+            }
+        };
 
-            var message = new WeixinMessage
-            {
-                FromUserId = string.Empty,
-                ToUserId = to,
-                ClientId = Guid.NewGuid().ToString(),
-                MessageType = MessageType.Bot,
-                MessageState = MessageState.Finish,
-                ContextToken = contextToken,
-                ItemList = new List<MessageItem> { messageItem }
-            };
-
-            var response = await _apiClient.SendMessageAsync(message);
-            return response.IsSuccess;
-        }
-        catch (Exception ex)
+        var message = new WeixinMessage
         {
-            _logger?.LogError(ex, "Failed to send file to {To}", to);
-            return false;
+            FromUserId = string.Empty,
+            ToUserId = to,
+            ClientId = Guid.NewGuid().ToString(),
+            MessageType = MessageType.Bot,
+            MessageState = MessageState.Finish,
+            ContextToken = contextToken,
+            ItemList = new List<MessageItem> { messageItem }
+        };
+
+        var response = await _apiClient.SendMessageAsync(message);
+        if (!response.IsSuccess)
+        {
+            throw new ApiException(response.Ret, response.ErrMsg ?? "Failed to send file");
         }
     }
 

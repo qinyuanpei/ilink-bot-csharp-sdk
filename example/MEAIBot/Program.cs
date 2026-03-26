@@ -99,8 +99,7 @@ try
                     conversationHistory[userId].Add(new MEAIChatMessage(MEAIChatRole.Assistant, reply));
 
                     // Send reply
-                    var success = await bot.SendTextAsync(userId, reply);
-                    Console.WriteLine($"Send result: {(success ? "Success" : "Failed")}");
+                    await bot.SendTextAsync(userId, reply);
                 }
                 catch (Exception ex)
                 {

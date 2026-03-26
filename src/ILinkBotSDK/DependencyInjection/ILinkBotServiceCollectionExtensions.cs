@@ -32,27 +32,76 @@ public static class ILinkBotServiceCollectionExtensions
             return new SqliteStateStorage(dbPath, logger);
         });
 
-        // Register API client
-        services.AddSingleton<WeixinApiClient>(sp =>
+        // Register API client (singleton, reuses HttpClient)
+        services.AddSingleton<IWeixinApiClient>(sp =>
         {
             var logger = sp.GetService<ILogger<WeixinApiClient>>();
-            var client = new WeixinApiClient(null, logger);
+            var httpClient = sp.GetService<HttpClient>();
+            var client = new WeixinApiClient(httpClient, logger);
             client.SetBaseUrl(options.BaseUrl);
             return client;
         });
 
+        // Register HttpClient if not already registered
+        if (services.All(s => s.ServiceType != typeof(HttpClient)))
+        {
+            services.AddSingleton(sp =>
+            {
+                var handler = new SocketsHttpHandler
+                {
+                    PooledConnectionLifetime = TimeSpan.FromMinutes(2)
+                };
+                return new HttpClient(handler);
+            });
+        }
+
         // Register login service
-        services.AddSingleton<QrCodeLoginService>();
+        services.AddSingleton<IQrCodeLoginService>(sp =>
+        {
+            var logger = sp.GetService<ILogger<QrCodeLoginService>>();
+            return new QrCodeLoginService(
+                sp.GetRequiredService<IWeixinApiClient>(),
+                logger,
+                options.EnableConsoleOutput);
+        });
 
         // Register message services
-        services.AddSingleton<MessageReceiver>();
-        services.AddSingleton<MessageSender>();
+        services.AddSingleton<IMessageReceiver>(sp =>
+        {
+            var logger = sp.GetService<ILogger<MessageReceiver>>();
+            return new MessageReceiver(
+                sp.GetRequiredService<IWeixinApiClient>(),
+                sp.GetRequiredService<IStateStorage>(),
+                logger);
+        });
+
+        services.AddSingleton<IMessageSender>(sp =>
+        {
+            var logger = sp.GetService<ILogger<MessageSender>>();
+            return new MessageSender(
+                sp.GetRequiredService<IWeixinApiClient>(),
+                sp.GetRequiredService<IStateStorage>(),
+                logger);
+        });
+
+        services.AddSingleton<ICdnHelper>(sp =>
+        {
+            return new CdnHelper(sp.GetRequiredService<IWeixinApiClient>());
+        });
 
         // Register bot instance
         services.AddSingleton<ILinkBot>(sp =>
         {
             var logger = sp.GetService<ILogger<ILinkBot>>();
-            return new ILinkBot(options, logger);
+            return new ILinkBot(
+                sp.GetRequiredService<IWeixinApiClient>(),
+                sp.GetRequiredService<IStateStorage>(),
+                sp.GetRequiredService<IQrCodeLoginService>(),
+                sp.GetRequiredService<IMessageReceiver>(),
+                sp.GetRequiredService<IMessageSender>(),
+                sp.GetRequiredService<ICdnHelper>(),
+                options,
+                logger);
         });
 
         return services;

@@ -12,13 +12,14 @@ namespace ILinkBotSDK;
 /// </summary>
 public class ILinkBot : IAsyncDisposable
 {
-    private readonly WeixinApiClient _apiClient;
+    private readonly IWeixinApiClient _apiClient;
     private readonly IStateStorage _stateStorage;
-    private readonly QrCodeLoginService _loginService;
-    private readonly MessageReceiver _messageReceiver;
-    private readonly MessageSender _messageSender;
-    private readonly CdnHelper _cdnHelper;
+    private readonly IQrCodeLoginService _loginService;
+    private readonly IMessageReceiver _messageReceiver;
+    private readonly IMessageSender _messageSender;
+    private readonly ICdnHelper _cdnHelper;
     private readonly ILogger<ILinkBot>? _logger;
+    private readonly bool _enableConsoleOutput;
 
     private bool _isConnected;
     private string? _botId;
@@ -42,7 +43,12 @@ public class ILinkBot : IAsyncDisposable
     /// <summary>
     /// CdnHlper
     /// </summary>
-    public CdnHelper File => _cdnHelper;
+    public ICdnHelper File => _cdnHelper;
+
+    /// <summary>
+    /// Called when login state changes
+    /// </summary>
+    public Action<LoginStatus, string?, string?>? OnLoginStateChanged;
 
     /// <summary>
     /// Create ILinkBot instance
@@ -53,6 +59,7 @@ public class ILinkBot : IAsyncDisposable
     {
         var baseUrl = options?.BaseUrl ?? "https://ilinkai.weixin.qq.com";
         var stateDirectory = options?.StateDirectory ?? ".ilink";
+        _enableConsoleOutput = options?.EnableConsoleOutput ?? true;
 
         // Ensure directory exists
         Directory.CreateDirectory(stateDirectory);
@@ -66,11 +73,34 @@ public class ILinkBot : IAsyncDisposable
         _apiClient.SetBaseUrl(baseUrl);
 
         // Initialize services
-        _loginService = new QrCodeLoginService(_apiClient);
+        _loginService = new QrCodeLoginService(_apiClient, enableConsoleOutput: _enableConsoleOutput, onStateChanged: OnLoginStateChanged);
         _messageReceiver = new MessageReceiver(_apiClient, _stateStorage);
         _messageSender = new MessageSender(_apiClient, _stateStorage);
         _cdnHelper = new CdnHelper(_apiClient);
         _logger = logger;
+    }
+
+    /// <summary>
+    /// Create ILinkBot instance with custom services (for DI)
+    /// </summary>
+    public ILinkBot(
+        IWeixinApiClient apiClient,
+        IStateStorage stateStorage,
+        IQrCodeLoginService loginService,
+        IMessageReceiver messageReceiver,
+        IMessageSender messageSender,
+        ICdnHelper cdnHelper,
+        ILinkBotOptions? options = null,
+        ILogger<ILinkBot>? logger = null)
+    {
+        _apiClient = apiClient;
+        _stateStorage = stateStorage;
+        _loginService = loginService;
+        _messageReceiver = messageReceiver;
+        _messageSender = messageSender;
+        _cdnHelper = cdnHelper;
+        _logger = logger;
+        _enableConsoleOutput = options?.EnableConsoleOutput ?? true;
     }
 
     /// <summary>
@@ -231,15 +261,14 @@ public class ILinkBot : IAsyncDisposable
     /// </summary>
     /// <param name="to">Recipient user ID</param>
     /// <param name="text">Text content</param>
-    /// <returns>Whether sending was successful</returns>
-    public async Task<bool> SendTextAsync(string to, string text)
+    public async Task SendTextAsync(string to, string text)
     {
         if (!_isConnected)
         {
             throw new InvalidOperationException("Not connected. Please call LoginAsync first.");
         }
 
-        return await _messageSender.SendTextAsync(to, text);
+        await _messageSender.SendTextAsync(to, text);
     }
 
     /// <summary>
@@ -247,59 +276,41 @@ public class ILinkBot : IAsyncDisposable
     /// </summary>
     /// <param name="to">Recipient user ID</param>
     /// <param name="filePath">Local file path</param>
-    /// <returns>Whether sending was successful</returns>
-    public async Task<bool> SendFileAsync(string to, string filePath)
+    public async Task SendFileAsync(string to, string filePath)
     {
         if (!_isConnected)
         {
             throw new InvalidOperationException("Not connected. Please call LoginAsync first.");
         }
 
-        try
-        {
-            // Upload to CDN
-            var uploaded = await _cdnHelper.UploadFileAsync(to, filePath);
+        // Upload to CDN
+        var uploaded = await _cdnHelper.UploadFileAsync(to, filePath);
 
-            // Send message with file
-            return await _messageSender.SendFileAsync(to, uploaded);
-        }
-        catch (Exception ex)
-        {
-            _logger?.LogError(ex, "Failed to send file {FilePath}", filePath);
-            return false;
-        }
+        // Send message with file
+        await _messageSender.SendFileAsync(to, uploaded);
     }
 
     /// <summary>
     /// Send remote file message
     /// </summary>
     /// <param name="to">Recipient user ID</param>
-    /// <param name="url">Remote URL of the file</param>
-    /// <returns>Whether sending was successful</returns>
-    public async Task<bool> SendRemoteFileAsync(string to, string url)
+    /// <param name="url">Remote file URL</param>
+    public async Task SendRemoteFileAsync(string to, string url)
     {
         if (!_isConnected)
         {
             throw new InvalidOperationException("Not connected. Please call LoginAsync first.");
         }
 
-        try
-        {
-            // Upload to CDN
-            var uploaded = await _cdnHelper.UploadFromUrlAsync(to, url);
+        // Upload from URL
+        var uploaded = await _cdnHelper.UploadFromUrlAsync(to, url);
 
-            // Send message with file
-            return await _messageSender.SendFileAsync(to, uploaded);
-        }
-        catch (Exception ex)
-        {
-            _logger?.LogError(ex, "Failed to send url {FilePath}", url);
-            return false;
-        }
+        // Send message with file
+        await _messageSender.SendFileAsync(to, uploaded);
     }
 
     /// <summary>
-    /// Send "typing" status
+    /// Send typing indicator
     /// </summary>
     public async Task SendTypingAsync(string to)
     {

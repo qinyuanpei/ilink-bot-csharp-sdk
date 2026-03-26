@@ -14,7 +14,7 @@ try
 {
     // Login (will auto-reuse saved credentials)
     Console.WriteLine("Logging in...");
-    await bot.LoginAsync();
+    await bot.LoginAsync(true);
 
     Console.WriteLine($"登录成功! BotID: {bot.BotId}, UserID: {bot.UserId}");
     Console.WriteLine();
@@ -69,8 +69,7 @@ try
                 var reply = $"[Bot] {text}";
                 Console.WriteLine($"发送回复: {reply}");
 
-                var success = await bot.SendTextAsync(msg.FromUserId!, reply);
-                Console.WriteLine($"发送结果: {(success ? "成功" : "失败")}");
+                await bot.SendTextAsync(msg.FromUserId!, reply);
                 Console.WriteLine();
 
                 await bot.SendFileAsync(msg.FromUserId!, "D:\\Documents\\MCP-Training\\MCP_For_.NET_Developers.pptx");

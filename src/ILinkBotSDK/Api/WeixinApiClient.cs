@@ -8,7 +8,7 @@ namespace ILinkBotSDK.Api;
 /// <summary>
 /// iLink API client
 /// </summary>
-public class WeixinApiClient : IDisposable
+public class WeixinApiClient : IWeixinApiClient, IDisposable
 {
     private readonly HttpClient _httpClient;
     private readonly ILogger<WeixinApiClient>? _logger;
